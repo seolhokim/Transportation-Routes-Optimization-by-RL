@@ -51,29 +51,17 @@
   - i tried almost random space!
 ### Reference
   - Trust Region Policy Optimization
-  
   - Proximal Policy Optimization Algorithm
-  
   - A Distributional Perspective on Reinforcement Learning
-  
   - Distributional Reinforcement Learning with Quntile Regression
-  
   - Deep Hierarchical Reinforcement Learning Algorithm in Partially Observable Markov Decision Processes
-  
   - Deterministic Policy Gradient Algorithm
-  
   - Continuous Control with Deep Reinforcement Learning 
-  
   - A Natural Policy Gradient
-  
   - Asynchronous Methods for Deep Reinforcement Learning 
-  
   - High-Demensional Continuous control using Generalized Advantage Estimation
-  
   - Deep Recurrent Q-Learning for Partially Observable MDPs
-  
   - Hierarchical Deep Reinforcement Learning : Integrating Temporal Abstraction and Intrinsic Motivation
-  
   - Mastering Chess and Shogi by Self-Play with a General Reinforcement Learning Algorithm
   
 
