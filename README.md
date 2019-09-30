@@ -6,8 +6,8 @@
 
 ## Experiments
 
-| Elevator Numbers | Building Heights | Max People in Floor| Max People in Elevator |Epochs | mean convergence point |
-| :---: | :---: | :---: | :---: |
+| Elevator Numbers | Building Heights | Max People in Floor| Max People in Elevator | Epochs | mean convergence point |
+| :---: | :---: | :---: | :---: | :---: | :---: |
 | 1 | 5 | 8 | 8 | 15,168 | 18.6
 | 1 | 6 | 6 | 6 | 100,000 | 23.6
 | 1 | 7 | 7 | 7 | 100,000 | 29.7
