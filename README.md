@@ -21,7 +21,10 @@
   - More Test!
   - More insight
   - Clean up the directory
-
+  - applicate more randomized environment
+  - build the environment using time ! not a step
+  - more accurate test is needed
+  
 ## Implemented Algorithms
   - PPO + GAE
     * one agent
