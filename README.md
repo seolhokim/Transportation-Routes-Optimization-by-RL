@@ -61,4 +61,5 @@
   -Mastering Chess and Shogi by Self-Play with a General Reinforcement Learning Algorithm
 
 ### Thanks to...
-@(shinseung428)[https://github.com/shinseung428], @(seungeunrho)[https://github.com/seungeunrho] 
+  - [@shinseung428](https://github.com/shinseung428)
+  - [seungeunrho](https://github.com/seungeunrho)
