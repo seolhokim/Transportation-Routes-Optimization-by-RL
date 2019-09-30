@@ -43,8 +43,12 @@
 ### Computation Increasing according to the Elevator's increase
 ![img](https://github.com/seolhokim/ppo_pytorch_elevator/blob/master/assets/computation_increase.PNG)
   - why Variance is increased?
-  * Cause States' dimension is increased.
-  
+  * -> Cause States' dimension is increased.
+
+### Distributional Critic Network test
+![img](https://github.com/seolhokim/ppo_pytorch_elevator/blob/master/assets/distributional.PNG)
+  - i have thought that distributional critic network can enhance the performance in pomdp. cause model doesn't know passengers' destiny, So distributional reward mapping will be helpful! but it doesn't
+  - i tried almost random space!
 ### Reference
   -Trust Region Policy Optimization
   -Proximal Policy Optimization Algorithm
