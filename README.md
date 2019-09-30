@@ -18,6 +18,7 @@
 ## Todo
   - Implement Hierarchy PPO
   - More Test!
+  - More insight
   - Clean up the directory
 
 ## Implemented Algorithms
@@ -30,6 +31,9 @@
 
 ## Update News
 
+### 2019.09.03
+  - Readme is updated
+  - directory is cleaned up.
 
 ## Convergance Point Image
 
@@ -38,4 +42,5 @@
 
 ### Computation Increasing according to the Elevator's increase
 ![img](https://github.com/seolhokim/ppo_pytorch_elevator/blob/master/assets/computation_increase.PNG)
-
+  - why Variance is increased?
+  * Cause States' dimension is increased.
