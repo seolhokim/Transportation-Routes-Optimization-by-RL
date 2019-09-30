@@ -1,196 +1,89 @@
-###agent
+﻿import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import torch.optim as optim
+from torch.distributions import Categorical
 
-import os
-import keras.layers as layers
-import keras.optimizers as optimizers
-from keras.models import Model
-from keras import backend as K
-import tensorflow as tf
-import numpy as np
-
-env_iteration_number = 5
-learning_rate = 0.0001
-lmbda =0.95
-eps_clip = 0.1
-gamma = 0.98
-class Value:
-    def __init__(self,input_shape):
-        self.input_shape = input_shape
-        self.__make_network()
-        self.__make_loss_function()
+#Hyperparameters
+learning_rate = 0.0005
+gamma         = 0.98
+lmbda         = 0.95
+eps_clip      = 0.1
+K_epoch       = 3
+T_horizon     = 20
+class Agent(nn.Module):
+    def __init__(self, state_dim,action_dim,learning_rate):
+        self.state_dim = state_dim
+        self.action_dim = action_dim
         
-    def __make_network(self):
-        input_layer = layers.Input(shape=(self.input_shape,))
-        x = layers.Dense(256,activation = 'relu')(input_layer)
-        x = layers.BatchNormalization()(x)
-        x = layers.Dense(256,activation = 'relu')(x)
-        x = layers.BatchNormalization()(x)
-        x = layers.Dense(1)(x)
-        self.model = Model(inputs = input_layer, outputs = x)
-    def get_value(self,state):
-        return self.model.predict(state)
-    
-    def __make_loss_function(self):
-        
-        value_output = self.model.output
-        reward_placeholder = K.placeholder(shape=(None,1),name = 'reward')
-        HUBER_DELTA = 0.5
-        y = tf.identity(reward_placeholder)
-        loss = K.abs(reward_placeholder - value_output)
-        loss = K.switch(loss < HUBER_DELTA, 0.5 * loss ** 2 , HUBER_DELTA * (loss - 0.5 * HUBER_DELTA))
-        loss = K.sum(loss)
-        #loss = K.mean(K.square(reward_placeholder - value_output))
-        
-        optimizer = optimizers.Adam(learning_rate)
-        update = optimizer.get_updates(loss =loss, params = self.model.trainable_weights)
-        
-        self.update_function = K.function(inputs = [self.model.input,\
-                                                   reward_placeholder],\
-                                         outputs = [] , updates = update)
-
-        
-        
-class Agent():
-    def __init__(self, building_height, elevator_nums, actions):
-        self.elevator_nums = elevator_nums
-        self.input_shape = building_height + elevator_nums * 2
-        self.output_shape = actions
-        
-        self.actor = Actor(self.input_shape,self.output_shape, self.elevator_nums)
-        self.value = Value(self.input_shape)
+        super(Agent,self).__init__()
         self.memory = []
-    def get_action(self, state):
-        return self.actor.get_action(state)
+
+        self.fc1 = nn.Linear(self.state_dim,256)
+        self.policy = nn.Linear(256, self.action_dim)
+        self.value = nn.Linear(256, 1)
+        self.optimizer = optim.Adam(self.parameters(),lr = learning_rate)
+        
+    def get_action(self,x, softmax_dim = 0):
+        x = F.relu(self.fc1(x))
+        x = self.policy(x)
+        prob = F.softmax(x, dim = softmax_dim)
+        return prob
+    
+    def get_value(self,x):
+        x = F.relu(self.fc1(x))
+        x = self.value(x)
+        return x
+    
     def put_data(self,data):
         self.memory.append(data)
         
-    def memory_to_trainable(self):
-        state_list, action_list, reward_list, next_state_list, prob_list, done_list = [],\
-        [], [], [], [], []
-        
+    def make_batch(self):
+        state_list, action_list, reward_list, next_state_list, prob_list, done_list = [],[],[],[],[],[]
         for data in self.memory:
-            state, action, reward, next_state, prob, done = data
-            
+            state,action,reward,next_state,prob,done = data
             state_list.append(state)
             action_list.append([action])
             reward_list.append([reward])
-            next_state_list.append(next_state)
             prob_list.append([prob])
-            done = 0 if done else 1
-            done_list.append([done])
-        return np.array(state_list), np.array(action_list), np.array(reward_list),\
-                np.array(next_state_list), np.array(prob_list), np.array(done_list)     
+            next_state_list.append(next_state)
+            done_mask = 0 if done else 1
+            done_list.append([done_mask])
+        self.memory = []
         
+        s,a,r,next_s,done_mask,prob = torch.tensor(state_list,dtype=torch.float),\
+                                        torch.tensor(action_list),torch.tensor(reward_list),\
+                                        torch.tensor(next_state_list,dtype=torch.float),\
+                                        torch.tensor(done_list,dtype = torch.float),\
+                                        torch.tensor(prob_list)
+        return s,a,r,next_s,done_mask,prob
+    
     def train(self):
-        global x_1
-        global x_2
-        global x_3
-        global y
-        state,action,reward,next_state,prob,done_mask = self.memory_to_trainable()
-        state = state.reshape(-1,self.input_shape)
-        action = action.reshape(-1,self.elevator_nums)
-        next_state = next_state.reshape(-1,self.input_shape)
-        done_mask = done_mask.reshape(-1,1)
-        prob = prob.reshape(-1,self.elevator_nums, self.output_shape)
-        for i in range(env_iteration_number):
-            #print('train iterate : ',i)
-            #print('state shape ' , state.shape)
-            #print('gamma', gamma)
-            #print(self.value.get_value(next_state))
-            #print(done_mask.shape)
-            td_error = reward + gamma * self.value.get_value(next_state) * done_mask
-            #print('td_error',td_error)
-            delta = np.array(td_error - self.value.get_value(state))
-            
-            #print('delta',delta)
+        state,action,reward, next_state,done_mask,action_prob = self.make_batch()
+
+        for i in range(K_epoch):
+            td_error = reward + gamma * self.get_value(next_state) * done_mask
+            delta = td_error - self.get_value(state)
+            delta = delta.detach().numpy()
             advantage_list = []
             advantage = 0.0
             for delta_t in delta[::-1]:
                 advantage = gamma * lmbda * advantage + delta_t[0]
-                #print('advantage',advantage)
-                advantage_list.append(advantage)
+                advantage_list.append([advantage])
             advantage_list.reverse()
-            advantage = np.array(advantage_list).reshape(-1,1)
+            advantage = torch.tensor(advantage_list,dtype = torch.float)
             
-            #print('advantage',advantage)
-            (self.value.update_function([state,advantage])) ###########test 0 train 1
-
-            x_1,x_2,x_3,y = (self.actor.update_function([state,action,prob,advantage]))###########test 0 train 1
-            #print('surr_1 : ',x_1) #surr_1,surr_2,ratio,loss
-            #print('surr_2 : ',x_2) #now_action_select, before_action_select, ratio,loss
-            #print('ratio : ',x_3) #now_action_prob_1[0],now_action_prob_1[1], before_action_prob ,loss
-            #print('loss : ',y) #,, \
-            #raise Exception() #for test
-        self.memory = []
-
-    def save(self, num):
-        self.actor.model.save_weights("./model_weights/actor_"+str(num)+".h5")
-        self.value.model.save_weights("./model_weights/value_"+str(num)+".h5")
-
-    def reload(self,num):
-        self.actor.model.load_weights("./model_weights/actor_"+str(num)+".h5")
-        self.value.model.load_weights("./model_weights/value_"+str(num)+".h5")
-class Actor:
-    def __init__(self,input_shape, output_shape,elevator_num):
-        self.input_shape = input_shape
-        self.output_shape = output_shape
-        self.elevator_num = elevator_num
-        self.__make_network()
-        self.__make_loss_function()
-        
-    def __make_network(self):
-        input_layer = layers.Input(shape=(self.input_shape,))    
-        x = layers.Dense(256, activation = 'relu')(input_layer)
-        x = layers.BatchNormalization()(x)
-        x = layers.Dense(256, activation = 'relu')(x)
-        x = layers.BatchNormalization()(x)
-        xs = [layers.Dense(self.output_shape, activation = 'softmax')(x)\
-              for _ in range(self.elevator_num)]
-        self.model = Model(inputs = input_layer, outputs = xs)
+            
+            now_action = self.get_action(state,softmax_dim = 1)
+            now_action = now_action.gather(1,action)
+            
+            ratio = torch.exp(torch.log(now_action) - torch.log(action_prob))
+            
+            surr1 = ratio * advantage
+            surr2 = torch.clamp(ratio , 1-eps_clip, 1 + eps_clip) * advantage
+            loss = - torch.min(surr1,surr2) + F.smooth_l1_loss(self.get_value(state),td_error.detach())
+            
+            self.optimizer.zero_grad()
+            loss.mean().backward()
+            self.optimizer.step()
     
-    def get_action(self,state):
-        return self.model.predict(state)
-    
-    def __make_loss_function(self):
-        before_action_prob = K.placeholder(shape = (None, self.elevator_num,self.output_shape),\
-                                          name = 'before_action_prob')
-        before_action = K.placeholder(shape = (None, self.elevator_num),\
-                                          name = 'before_action',dtype = 'int64') ########
-
-        advantage = K.placeholder(shape = (None,1), name ='advantage')
-        
-        y = tf.identity(before_action_prob) #for test
-        now_action_prob_1 = self.model.output
-        
-        
-        #now_action_prob_test_1 = now_action_prob_1[0]
-        #now_action_prob_test_2 = now_action_prob_1[1]
-        #now_action_prob = tf.stack([now_action_prob_test_1,now_action_prob_test_2],axis=1)
-        now_action_prob = K.reshape(now_action_prob_1,(-1,self.elevator_num,self.output_shape))
-        
-        now_action_select = K.sum(now_action_prob * tf.squeeze(tf.one_hot(before_action,\
-                                                                          depth=self.output_shape)) ,axis=-1) 
-        before_action_select = K.sum(before_action_prob * tf.squeeze(tf.one_hot(before_action,\
-                                                                                depth=self.output_shape)) ,axis=-1)
-
-        #ratio = - K.mean(now_action_select / before_action_select)
-        #now_action_select = K.reshape(now_action_select,(-1,1))
-        #before_action_select = K.reshape(before_action_select,(-1,1))
-        ratio =  (K.exp(K.log(now_action_select)- K.log(before_action_select)))
-        surr_1 = advantage * ratio
-        surr_2 = advantage * K.clip(ratio, 1-eps_clip, 1+eps_clip) 
-        loss = -K.mean(K.minimum(surr_1,surr_2))
-        optimizer = optimizers.Adam(lr = learning_rate)
-        updates = optimizer.get_updates(loss = loss, params = self.model.trainable_weights)
-        ##현재 확인점
-        ### 1. surr_1,surr_2,ratio,loss ## surr_1, surr_2 존나다른데?
-        ### 2. now_action_select, before_action_select, ratio,loss ### nowaction beforeaction 존나다름
-        ### 3. now_action_prob_1[0],now_action_prob_1[1], before_action_prob,loss 
-        #### : output이 update가 된상태로 처음부터나오게되는데 왜그런지 모르겠음.
-        ####K.learning_phase() 제거하니까 됨
-        ### 4. surr_1,surr_2,ratio,loss
-        self.update_function = K.function(inputs = [self.model.input,before_action,\
-                                       before_action_prob,advantage],\
-                            outputs = [surr_1, surr_2,ratio,  loss], \
-                            updates = updates)       #output is for test
-####agenttate shape 
