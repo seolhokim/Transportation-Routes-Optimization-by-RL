@@ -50,31 +50,31 @@
   - i have thought that distributional critic network can enhance the performance in pomdp. cause model doesn't know passengers' destiny, So distributional reward mapping will be helpful! but it doesn't
   - i tried almost random space!
 ### Reference
-  -Trust Region Policy Optimization
+  - Trust Region Policy Optimization
   
-  -Proximal Policy Optimization Algorithm
+  - Proximal Policy Optimization Algorithm
   
-  -A Distributional Perspective on Reinforcement Learning
+  - A Distributional Perspective on Reinforcement Learning
   
-  -Distributional Reinforcement Learning with Quntile Regression
+  - Distributional Reinforcement Learning with Quntile Regression
   
-  -Deep Hierarchical Reinforcement Learning Algorithm in Partially Observable Markov Decision Processes
+  - Deep Hierarchical Reinforcement Learning Algorithm in Partially Observable Markov Decision Processes
   
-  -Deterministic Policy Gradient Algorithm
+  - Deterministic Policy Gradient Algorithm
   
-  -Continuous Control with Deep Reinforcement Learning 
+  - Continuous Control with Deep Reinforcement Learning 
   
-  -A Natural Policy Gradient
+  - A Natural Policy Gradient
   
-  -Asynchronous Methods for Deep Reinforcement Learning 
+  - Asynchronous Methods for Deep Reinforcement Learning 
   
-  -High-Demensional Continuous control using Generalized Advantage Estimation
+  - High-Demensional Continuous control using Generalized Advantage Estimation
   
-  -Deep Recurrent Q-Learning for Partially Observable MDPs
+  - Deep Recurrent Q-Learning for Partially Observable MDPs
   
-  -Hierarchical Deep Reinforcement Learning : Integrating Temporal Abstraction and Intrinsic Motivation
+  - Hierarchical Deep Reinforcement Learning : Integrating Temporal Abstraction and Intrinsic Motivation
   
-  -Mastering Chess and Shogi by Self-Play with a General Reinforcement Learning Algorithm
+  - Mastering Chess and Shogi by Self-Play with a General Reinforcement Learning Algorithm
   
 
 ### Thanks to...
