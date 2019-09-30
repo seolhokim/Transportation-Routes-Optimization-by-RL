@@ -39,23 +39,23 @@
   - directory is cleaned up.
 
 
+## Plot
 
-## Convergance Point Image
+### Convergance Point Image
 
-
-### liftnum : 1, buildingheight : 3, maxpeopleinfloor : 3, maxpeopleinelevator : 3
+#### liftnum : 1, buildingheight : 3, maxpeopleinfloor : 3, maxpeopleinelevator : 3
 ![img](https://github.com/seolhokim/ppo_pytorch_elevator/blob/master/assets/converge_point.PNG)
 
 
 
-### Computation Increasing according to the Elevator's increase
+#### Computation Increasing according to the Elevator's increase
 ![img](https://github.com/seolhokim/ppo_pytorch_elevator/blob/master/assets/computation_increase.PNG)
   - why Variance is increased?
   * -> Cause States' dimension is increased.
 
 
 
-### Distributional Critic Network test
+#### Distributional Critic Network test
 ![img](https://github.com/seolhokim/ppo_pytorch_elevator/blob/master/assets/distributional.PNG)
   - i have thought that distributional critic network can enhance the performance in pomdp. cause model doesn't know passengers' destiny, So distributional reward mapping will be helpful! but it doesn't
   - i tried almost random space!
