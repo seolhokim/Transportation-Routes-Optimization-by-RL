@@ -29,26 +29,58 @@
   - Distributional PPO(QR PPO)
     * one agent
 
+
+
 ## Update News
+
 
 ### 2019.09.03
   - Readme is updated
   - directory is cleaned up.
 
+
+
 ## Convergance Point Image
+
 
 ### liftnum : 1, buildingheight : 3, maxpeopleinfloor : 3, maxpeopleinelevator : 3
 ![img](https://github.com/seolhokim/ppo_pytorch_elevator/blob/master/assets/converge_point.PNG)
+
+
 
 ### Computation Increasing according to the Elevator's increase
 ![img](https://github.com/seolhokim/ppo_pytorch_elevator/blob/master/assets/computation_increase.PNG)
   - why Variance is increased?
   * -> Cause States' dimension is increased.
 
+
+
 ### Distributional Critic Network test
 ![img](https://github.com/seolhokim/ppo_pytorch_elevator/blob/master/assets/distributional.PNG)
   - i have thought that distributional critic network can enhance the performance in pomdp. cause model doesn't know passengers' destiny, So distributional reward mapping will be helpful! but it doesn't
   - i tried almost random space!
+  
+### RUN
+
+~~~
+python main.py
+~~~
+
+  - if you want to change hyper-parameters, you can check "python main.py --help"
+  
+  
+  - '--test' :  type=bool, default=False, help="True if test, False if train (default: False)"
+  - '--epochs' :  type=int, default=100, help='number of epochs, (default: 100)'
+  - '--lr_rate' : type=float, default=0.0001, help='learning rate (default : 0.0001)'
+  - '--lift_num' : type=int, default=1, help='number of elevators'
+  - '--building_height' : type=int, default=5, help='building height '
+  - '--max_people_in_floor' : type=int, default=8, help='maximum people in one floor'
+  - '--max_people_in_elevator' : type=int, default=8, help='maximum people in one elevator'
+  - "--load_file" : type=int, default = 0, help = 'load initial parameters'
+  - "--save_interval" : type=int, default = 1000, help = 'save interval'
+  - "--print_interval" : type=int, default = 20, help = 'print interval'
+  
+
 ### Reference
   - Trust Region Policy Optimization
   - Proximal Policy Optimization Algorithm
