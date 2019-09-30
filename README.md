@@ -62,4 +62,4 @@
 
 ### Thanks to...
   - [@shinseung428](https://github.com/shinseung428)
-  - [seungeunrho](https://github.com/seungeunrho)
+  - [@seungeunrho](https://github.com/seungeunrho)
