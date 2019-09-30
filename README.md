@@ -67,6 +67,8 @@ python main.py
 ~~~
 
   - if you want to change hyper-parameters, you can check "python main.py --help"
+  - you just train and test basic model using main.py
+  - if you want to look more various model, then look the note_*
   
   
   - '--test' :  type=bool, default=False, help="True if test, False if train (default: False)"
@@ -79,6 +81,15 @@ python main.py
   - "--load_file" : type=int, default = 0, help = 'load initial parameters'
   - "--save_interval" : type=int, default = 1000, help = 'save interval'
   - "--print_interval" : type=int, default = 20, help = 'print interval'
+
+### File Description
+  - note_training_one_elevator.ipynb : basic one enviroment, one elevator training notebook
+  - note_training_multi_elevator.ipynb : basic one environment, multiple elevator training notebook
+  - note_seperate_one_elevator.ipynb : one environment, one elevator. but it seperate the network between inside of elevator and inside of building.(it is the first model to try using convolution model. but it made not good result.
+  - note_multi_env_one_agent.ipynb : multi environment, one elevator. it is more robust model than one environment.
+  - note_multi_env_multi_agent.ipynb : multi environment, multi elevator. it is more robust model than one environment.
+  - note_lstm_one_elevator.ipynb : one environment, one elevator. it needs more computation and makes not good result.
+  - note_distributional_one_elevator.ipynb : one environment, one elevator. i modified Passenger.py to give more randomness. and tried an experiment. the result was bad.
   
 
 ### Reference
