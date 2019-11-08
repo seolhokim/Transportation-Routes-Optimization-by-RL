@@ -1,5 +1,5 @@
 # Elevator Computation Research
-[![Hits](https://hits.seeyoufarm.com/api/count/incr/badge.svg?url=https%3A%2F%2Fgithub.com%2Fgjbae1212%2Fhit-counter)]
+![Hits](https://hits.seeyoufarm.com/api/count/incr/badge.svg?url=https%3A%2F%2Fgithub.com%2Fgjbae1212%2Fhit-counter)
 - application of reinforcement learning to improve elevator performance
                                   
 <left><img src="https://github.com/seolhokim/ppo_pytorch_elevator/blob/master/assets/gif4.gif" width="250" height="200"></left>
