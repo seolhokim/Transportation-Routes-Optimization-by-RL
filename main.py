@@ -27,13 +27,13 @@ global_step = 0
 def main(): #str
     parser = argparse.ArgumentParser('parameters')
     parser.add_argument('--test', type=bool, default=False, help="True if test, False if train (default: False)")
-    parser.add_argument('--epochs', type=int, default=10000, help='number of epochs, (default: 100)')
+    parser.add_argument('--epochs', type=int, default=1000, help='number of epochs, (default: 100)')
     parser.add_argument('--lr_rate', type=float, default=0.0001, help='learning rate (default : 0.0001)')
     parser.add_argument('--lift_num', type=int, default=1, help='number of elevators ')
     parser.add_argument('--building_height', type=int, default=5, help='building height ')
     parser.add_argument('--max_people_in_floor', type=int, default=8, help='maximum people in one floor')
     parser.add_argument('--max_people_in_elevator', type=int, default=8, help='maximum people in one elevator')
-    parser.add_argument("--load_file", type=int, default = 0, help = 'load initial parameters')
+    parser.add_argument("--load_file", type=str, default = 'no', help = 'load initial parameters')
     parser.add_argument("--save_interval", type=int, default = 1000, help = 'save interval')
     parser.add_argument("--print_interval", type=int, default = 20, help = 'print interval')
     args = parser.parse_args()
@@ -51,9 +51,9 @@ def main(): #str
     building = Building(args.lift_num, args.building_height, args.max_people_in_floor,\
                         args.max_people_in_elevator)
     model = Agent((args.building_height)+ args.max_people_in_elevator + (args.lift_num *2),4,args.lr_rate)
-    try:
-        model.load_state_dict(torch.load("./model_weights/model_"+str(args.load_file)))
-    except:
+    if args.load_file != 'no':
+        model.load_state_dict(torch.load("./model_weights/"+str(args.load_file)))
+    else:
         pass
     ave_reward = 0 
     
@@ -85,6 +85,7 @@ def main(): #str
                     os.system("cls")
                     building.print_building(global_step)
                     print(action)
+                    print('now reward : ',reward)
                     time.sleep(1.5)
                 if done or (global_step > 300):
                     done = True
@@ -98,5 +99,6 @@ def main(): #str
             ave_reward = 0
         #if (epoch % args.save_interval == 0 )& (epoch != 0):
         #    torch.save(model.state_dict(), './model_weights/model_'+str(epoch))
+    torch.save(model.state_dict(), './model_weights/model')
 if __name__ == '__main__':
     main()
