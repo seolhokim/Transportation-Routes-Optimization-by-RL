@@ -27,21 +27,10 @@ class Building(object):
         self.elevators = []
         for idx in range(total_elevator_num):
             self.elevators.append(Elevator(idx, elevator_capacity, max_floor))
-
         self.max_floor = max_floor
         self.floors_information = []
         for idx in range(max_floor):
             self.floors_information.append([])
-
-    def get_reward(self) -> float :
-        '''
-        make reward function to get better agent
-        '''
-        #res = self.get_arrived_people() - 1
-        reward = self.get_arrived_passengers() - sum([len(x) for x in self.floors_information])\
-                - sum([len(x.curr_passengers_in_elv) for x in self.elevators]) + self.cumulated_reward
-        self.cumulated_reward = 0
-        return reward
     
     def get_arrived_passengers(self) -> int :
         arrived_passengers=0
@@ -50,7 +39,7 @@ class Building(object):
             e.arrived_passengers_num = 0
         return arrived_passengers
 
-    def get_state(self) -> list:
+    def get_state(self) -> list :
         res = [float(len(elem))/float(self.max_passengers_in_floor) for idx, elem in enumerate(self.floors_information)]
         #엘리베이터에 탑승한 승객들의 목적지를 list형태로 res에 추가. 엘리베이터 갯수만큼 리스트형태로 추가됨.
         for e in self.elevators:
@@ -75,7 +64,12 @@ class Building(object):
         for e in self.elevators:
             e.empty()
         self.remain_passengers_num = 0
-
+    def get_remain_passengers_in_building(self):
+        return sum([len(x) for x in self.floors_information]) 
+    def get_remain_passengers_in_elv(self,elv):
+        return len(elv.curr_passengers_in_elv)
+    def get_remain_all_passengers(self):
+        return sum([self.get_remain_passengers_in_elv(x) for x in self.elevators]) +  self.get_remain_passengers_in_building()
     def generate_passengers(self, prob : float, passenger_max_num : int = 6):
         '''
         generate random people in building and button press in each floor
@@ -90,37 +84,43 @@ class Building(object):
                 self.floors_information[floor_num] += additional_passengers
                 self.remain_passengers_num += passenger_num
 
-    def perform_action(self, action):
+    def perform_action(self, action : list):
+        arrived_passengers_num_lst = []
+        penalty_lst = []
         for idx,e in enumerate(self.elevators):
             if action[idx] == 0 :
                 '''
                 elevator goes downstairs. 
                 '''
                 if e.curr_floor == 0 :
-                    self.cumulated_reward -= 1                      
+                    penalty_lst.append(-1)
                 e.move_down()
             elif action[idx] == 1:
                 '''
                 elevator goes upstairs.
                 '''
                 if e.max_floor == e.curr_floor - 1:
-                    self.cumulated_reward -= 1
+                    penalty_lst.append(-1)
                 e.move_up()
             elif action[idx] == 2:
                 '''
                 elevator loads passengers
                 '''
-                if self.floors_information[e.curr_floor] == 0:
-                    self.cumulated_reward -= 1
+                if len(self.floors_information[e.curr_floor]) == 0:
+                    penalty_lst.append(-1)
                 self.floors_information[e.curr_floor] = e.load_passengers(self.floors_information[e.curr_floor])
             elif action[idx] == 3:
                 '''
                 elevator unloads passengers
                 '''
-                if len(e.curr_passengers_in_elv) == 0 :
-                    self.cumulated_reward -= 1
-                res = e.unload_passengers(self.floors_information[e.curr_floor])
-        return self.get_reward()
+                arrived_passengers_num = e.unload_passengers(self.floors_information[e.curr_floor])
+                if arrived_passengers_num == 0 :
+                    penalty_lst.append(-1)
+                arrived_passengers_num_lst.append(arrived_passengers_num)
+
+        reward = sum(arrived_passengers_num_lst) + sum(penalty_lst) - self.get_remain_all_passengers()
+        return reward
+        #return self.get_reward()
     
     def print_building(self, step : int):
         for idx in reversed(list(range(1,self.max_floor))):
@@ -162,4 +162,4 @@ class Building(object):
         print("Total # of people: %d"%self.remain_passengers_num)
         print("Step: %d"%step)
         print('state : ',self.get_state())
-        print('now reward : ',self.get_reward())
+        #print('now reward : ',self.get_reward())
