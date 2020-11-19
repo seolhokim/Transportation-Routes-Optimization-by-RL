@@ -1,18 +1,30 @@
 import numpy as np 
 
 class Elevator(object):
-    def __init__(self, num, max_people, max_height):
-        self.idx = num
-        self.max_height = max_height
-        self.max_people = max_people
+    '''
+    Elevator can move passenger to another floor.
+    If elevator transports passenger to his(her) destination well, then it occurs positive reward.
+    The elevator can only carry a limited number of people at a time.
+    '''
+    def __init__(self, idx : int, max_passengers : int, max_floor : int):
+        '''
+        idx(int) : elevator name to classify
+        max_passengers(int) : limited number of passengers at a time.
+        max_floor(int) : maximum number of floors in a building
+        
+        curr_floor(int) : elevator's current floor 
+        curr_passengers(list(Passanger)) : the passengers who are transported by this elevator.
+        arrived_passengers_num(int) : number of arrived passengers for calculate reward
+        '''
+        self.idx = idx
+        self.max_floor = max_floor
+        self.max_passengers = max_passengers
         self.curr_floor = 0
-        self.curr_people = []
-
-        # 그 순간에 내릴 인원. Building의 get_arrived_people에서 사용할거임
-        self.off_people=0 ##있어야함?
+        self.curr_passengers_in_elv = []
+        self.arrived_passengers_num = 0 
 
     def move_up(self):
-        if self.curr_floor < self.max_height-1:
+        if self.curr_floor < self.max_floor-1:
             self.curr_floor += 1
 
     def move_down(self):
@@ -20,42 +32,47 @@ class Elevator(object):
             self.curr_floor -= 1
 
     def empty(self):
-        self.curr_people = []
+        self.curr_passengers_in_elv = []
         self.curr_floor = 0
 
-    # function loads people into the elevator
-    def load_people(self, people_in_floor):
-        res = 0 # for rest people
-        if len(people_in_floor) > (self.max_people - len(self.curr_people)):
+    def load_passengers(self, passengers_in_floor : int) -> list:
+        '''
+        function loads passengers into the elevator
+        res(list(Passenger)) : passengers who are unable to get on elevator because of the elevator's maximum capacity.
+        '''
+        if len(passengers_in_floor) > (self.max_passengers - len(self.curr_passengers_in_elv)):
             #FIFO
-            res = people_in_floor[self.max_people - len(self.curr_people):]
-            for p in people_in_floor[:self.max_people - len(self.curr_people)]:
-                self.curr_people.append(p)
+            res = passengers_in_floor[self.max_passengers - len(self.curr_passengers_in_elv):]
+            for p in passengers_in_floor[:self.max_passengers - len(self.curr_passengers_in_elv)]:
+                self.curr_passengers_in_elv.append(p)
         else:
-            for p in people_in_floor:
-                self.curr_people.append(p)
+            for p in passengers_in_floor:
+                self.curr_passengers_in_elv.append(p)
             res = []
         return res
 
-    # function unloads people back into the building 
-    def unload_people(self, people_in_floor):
-        num_in_floor = len(people_in_floor)
-        res = self.curr_people
-        self.off_people = 0
 
-        #승객 중 이 층에 내릴 사람 idx 저장 할 리스트,
-        this_floor_people = []
-        for i in range(len(self.curr_people)):
-            if self.curr_people[i].dest == self.curr_floor:
-                this_floor_people.append(i)
+    def unload_passengers(self, passengers_in_floor) -> int:
+        '''
+        function unloads passengers back into the building 
+        
+        arrived_passengers(list(Passenger)) : list of passengers to drop off on this floor
+        '''
+        arrived_passengers = []
+        num_in_floor = len(passengers_in_floor)
+        self.arrived_passengers_num = 0
+        
+        for i in range(len(self.curr_passengers_in_elv)):
+            if self.curr_passengers_in_elv[i].dest == self.curr_floor:
+                arrived_passengers.append(i)
 
-        #이 층에서 내릴 사람 있으면
-        if len(this_floor_people) !=0:
-            self.off_people = len(this_floor_people)
-            this_floor_people.reverse() #왜 reverse?
-            for i in this_floor_people:
-                res.pop(i)
-        return self.off_people
+        #If anyone gets off this floor
+        if len(arrived_passengers) !=0:
+            self.arrived_passengers_num = len(arrived_passengers)
+            arrived_passengers.reverse() #TODO : Debugging
+            for i in arrived_passengers:
+                self.curr_passengers_in_elv.pop(i)
+        return self.arrived_passengers_num
 
 
 
