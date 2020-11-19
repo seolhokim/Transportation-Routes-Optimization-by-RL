@@ -1,8 +1,9 @@
-import numpy as np 
+import numpy as np
+
 from environment.Elevator import Elevator
 from environment.Passenger import Passenger
 
-# Building Class
+
 class Building(object):
     '''
     Building controls elevators and passengers.
@@ -41,6 +42,7 @@ class Building(object):
                 - sum([len(x.curr_passengers_in_elv) for x in self.elevators]) + self.cumulated_reward
         self.cumulated_reward = 0
         return reward
+    
     def get_arrived_passengers(self) -> int :
         arrived_passengers=0
         for e in self.elevators:
@@ -62,7 +64,6 @@ class Building(object):
             res.append(float(len(e.curr_passengers_in_elv))/float(e.max_passengers))
         return res
 
-    
     def empty_building(self):
         '''
         clears the building 
@@ -73,7 +74,6 @@ class Building(object):
             self.floors_information.append([])
         for e in self.elevators:
             e.empty()
-            
         self.remain_passengers_num = 0
 
     def generate_passengers(self, prob : float, passenger_max_num : int = 6):
@@ -84,33 +84,21 @@ class Building(object):
             if np.random.random() < prob and len(self.floors_information[floor_num]) < self.max_passengers_in_floor:
                 passenger_num = np.random.randint(1,passenger_max_num)
                 passenger_num = min(self.max_passengers_in_floor, len(self.floors_information[floor_num]) + passenger_num)
-
                 additional_passengers = []
                 for p in range(passenger_num):
                     additional_passengers.append(Passenger(now_floor=floor_num, max_floor=self.max_floor))
-                #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@TODO
                 self.floors_information[floor_num] += additional_passengers
                 self.remain_passengers_num += passenger_num
 
-
     def perform_action(self, action):
         for idx,e in enumerate(self.elevators):
-            if action[idx] == 3:
+            if action[idx] == 0 :
                 '''
-                elevator unloads passengers
+                elevator goes downstairs. 
                 '''
-                if len(e.curr_passengers_in_elv) == 0 :
-                    self.cumulated_reward -= 1
-                res = e.unload_passengers(self.floors_information[e.curr_floor])#, self.max_people_in_floor
-
-            elif action[idx] == 2:
-                '''
-                elevator loads passengers
-                '''
-                if self.floors_information[e.curr_floor] == 0:
-                    self.cumulated_reward -= 1
-                self.floors_information[e.curr_floor] = e.load_passengers(self.floors_information[e.curr_floor])
-
+                if e.curr_floor == 0 :
+                    self.cumulated_reward -= 1                      
+                e.move_down()
             elif action[idx] == 1:
                 '''
                 elevator goes upstairs.
@@ -118,15 +106,22 @@ class Building(object):
                 if e.max_floor == e.curr_floor - 1:
                     self.cumulated_reward -= 1
                 e.move_up()
-
-            elif action[idx] == 0:
+            elif action[idx] == 2:
                 '''
-                elevator goes downstairs. 
+                elevator loads passengers
                 '''
-                if e.curr_floor == 0 :
-                    self.cumulated_reward -= 1                      
-                e.move_down()
-
+                if self.floors_information[e.curr_floor] == 0:
+                    self.cumulated_reward -= 1
+                self.floors_information[e.curr_floor] = e.load_passengers(self.floors_information[e.curr_floor])
+            elif action[idx] == 3:
+                '''
+                elevator unloads passengers
+                '''
+                if len(e.curr_passengers_in_elv) == 0 :
+                    self.cumulated_reward -= 1
+                res = e.unload_passengers(self.floors_information[e.curr_floor])
+        return self.get_reward()
+    
     def print_building(self, step : int):
         for idx in reversed(list(range(1,self.max_floor))):
             print("=======================================================")
