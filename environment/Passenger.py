@@ -6,10 +6,13 @@ class Passenger(object):
     The number of passenger is randomly generated on all floor.
     And destination of all passenger us also randomly generated.
     '''
-    def __init__(self,now_floor,max_floor):
+    def __init__(self,now_floor : int,max_floor : int):
         self.now_floor = now_floor
         self.dest = random.choice(list(range(now_floor)) + list(range(now_floor+1,max_floor)))
-    def return_dest(self):
+        
+    def get_dest(self) -> int:
         return self.dest
+
+
 
 

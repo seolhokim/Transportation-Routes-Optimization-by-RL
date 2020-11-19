@@ -39,20 +39,11 @@ class Building(object):
             e.arrived_passengers_num = 0
         return arrived_passengers
 
-    def get_state(self) -> list :
-        res = [float(len(elem))/float(self.max_passengers_in_floor) for idx, elem in enumerate(self.floors_information)]
-        #엘리베이터에 탑승한 승객들의 목적지를 list형태로 res에 추가. 엘리베이터 갯수만큼 리스트형태로 추가됨.
-        for e in self.elevators:
-            temp_lst = []
-            for p in e.curr_passengers_in_elv:
-                temp_lst.append(p.return_dest())
-            temp_lst.sort()
-            [res.append((temp_lst[x] +1)/ self.max_floor) if x < len(temp_lst) else res.append(0.) for x in range(self.max_passengers_in_elevator) ]
-        for e in self.elevators:
-            res.append(float(e.curr_floor)/float(self.max_floor))
-            res.append(float(len(e.curr_passengers_in_elv))/float(e.max_passengers))
-        return res
-
+    def get_state(self) -> tuple:
+        floor_passengers = [[[floor,passenger.get_dest()] for passenger in passengers] for floor, passengers in enumerate(self.floors_information)]
+        elv_passengers = [e.get_passengers_info() for e in self.elevators]
+        return floor_passengers,elv_passengers
+    
     def empty_building(self):
         '''
         clears the building 
