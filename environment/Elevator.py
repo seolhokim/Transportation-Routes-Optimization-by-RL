@@ -13,7 +13,7 @@ class Elevator(object):
         max_floor(int) : maximum number of floors in a building
         
         curr_floor(int) : elevator's current floor 
-        curr_passengers(list(Passanger)) : the passengers who are transported by this elevator.
+        curr_passengers_in_elv(list(Passanger)) : the passengers who are transported by this elevator.
         arrived_passengers_num(int) : number of arrived passengers for calculate reward
         '''
         self.idx = idx
