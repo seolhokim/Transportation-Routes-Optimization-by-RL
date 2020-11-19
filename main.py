@@ -7,7 +7,7 @@ from torch.distributions import Categorical
 from Agent import Agent
 import numpy as np
 import os
-from Building import Building
+from environment.Building import Building
 import time
 
 
@@ -27,7 +27,7 @@ global_step = 0
 def main(): #str
     parser = argparse.ArgumentParser('parameters')
     parser.add_argument('--test', type=bool, default=False, help="True if test, False if train (default: False)")
-    parser.add_argument('--epochs', type=int, default=100, help='number of epochs, (default: 100)')
+    parser.add_argument('--epochs', type=int, default=10000, help='number of epochs, (default: 100)')
     parser.add_argument('--lr_rate', type=float, default=0.0001, help='learning rate (default : 0.0001)')
     parser.add_argument('--lift_num', type=int, default=1, help='number of elevators ')
     parser.add_argument('--building_height', type=int, default=5, help='building height ')
@@ -59,8 +59,8 @@ def main(): #str
     
     for epoch in range(args.epochs):
         building.empty_building()
-        while building.target == 0 :
-            building.generate_people(add_people_prob)
+        while building.remain_passengers_num == 0 :
+            building.generate_passengers(add_people_prob)
         state = building.get_state()
         done = False
         global_step = 0
@@ -71,8 +71,7 @@ def main(): #str
                 action_prob = model.get_action(torch.from_numpy(np.array(state)).float())
                 m = Categorical(action_prob)
                 action = m.sample().item()
-                building.perform_action([action])
-                reward = building.get_reward() 
+                reward = building.perform_action([action])
 
                 next_state = building.get_state()
                 finished = next_state.copy()
@@ -97,7 +96,7 @@ def main(): #str
         if epoch%args.print_interval==0 and epoch!=0:
             print("# of episode :{}, avg score : {:.1f}".format(epoch, ave_reward/args.print_interval))
             ave_reward = 0
-        if (epoch % args.save_interval == 0 )& (epoch != 0):
-            torch.save(model.state_dict(), './model_weights/model_'+str(epoch))
+        #if (epoch % args.save_interval == 0 )& (epoch != 0):
+        #    torch.save(model.state_dict(), './model_weights/model_'+str(epoch))
 if __name__ == '__main__':
     main()
