@@ -99,7 +99,7 @@ class Building(object):
                 '''
                 elevator goes upstairs.
                 '''
-                if e.max_floor == e.curr_floor - 1:
+                if (e.max_floor-1) == (e.curr_floor):
                     penalty_lst.append(-1)
                 e.move_up()
             elif action[idx] == 2:
