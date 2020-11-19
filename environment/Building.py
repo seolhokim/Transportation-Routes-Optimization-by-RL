@@ -40,7 +40,8 @@ class Building(object):
         return arrived_passengers
 
     def get_state(self) -> tuple:
-        floor_passengers = [[[floor,passenger.get_dest()] for passenger in passengers] for floor, passengers in enumerate(self.floors_information)]
+        floor_passengers = [[[floor,passenger.get_dest()] for passenger in passengers ] for floor, passengers in enumerate(self.floors_information)]
+        floor_passengers = [x for x in floor_passengers if x != []]
         elv_passengers = [e.get_passengers_info() for e in self.elevators]
         return floor_passengers,elv_passengers
     
