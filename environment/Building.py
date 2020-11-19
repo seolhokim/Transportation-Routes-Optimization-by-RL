@@ -2,124 +2,133 @@ import numpy as np
 from environment.Elevator import Elevator
 from environment.Passenger import Passenger
 
-class Switch(object):
-    def __init__(self):
-        self.up = " "
-        self.down = " "
-
-    def reset(self):
-        self.up = " "
-        self.down = " "
-
 # Building Class
 class Building(object):
-    def __init__(self, total_elevator_num, height, max_people,max_people_in_elevator):
-        self.target = 0
+    '''
+    Building controls elevators and passengers.
+    It sets constraints and operates entire environment.
+    '''
+    def __init__(self, total_elevator_num : int, max_floor : int, max_passengers_in_floor : int,max_passengers_in_elevator : int, elevator_capacity : int = 10):
+        '''
+        remain_passengers_num(int) : remain passengers in building
+        total_elevator_num(int) : total number of elevator
+        max_passengers_in_floor(int) : maximum number of passengers in one floor
+        max_passengers_in_elevator(int) : maximum number of one elevator
+        max_floor(int) : maximum floor in the building
+        floors_information(list(Passenger)) : passenger's information on each floor
+        elevators(list(Elevator)) : elevator list
+        '''
+        self.remain_passengers_num = 0
         self.cumulated_reward = 0
         self.total_elevator_num = total_elevator_num
-        self.max_people_in_floor = max_people
-        self.max_people_in_elevator = max_people_in_elevator
-        #each elevator has max capacity of 10
+        self.max_passengers_in_floor = max_passengers_in_floor
+        self.max_passengers_in_elevator = max_passengers_in_elevator
         self.elevators = []
         for idx in range(total_elevator_num):
-            self.elevators.append(Elevator(idx, 10, height))
+            self.elevators.append(Elevator(idx, elevator_capacity, max_floor))
 
-        self.height = height
-        self.people_in_floors = []
-        self.floor_button = []
-        for idx in range(height):
-            self.people_in_floors.append([])
-            self.floor_button.append(Switch())
+        self.max_floor = max_floor
+        self.floors_information = []
+        for idx in range(max_floor):
+            self.floors_information.append([])
 
-    def get_reward(self):
+    def get_reward(self) -> float :
+        '''
+        make reward function to get better agent
+        '''
         #res = self.get_arrived_people() - 1
-        res = self.get_arrived_people() - sum([len(x) for x in self.people_in_floors])\
-                - sum([len(x.curr_people) for x in self.elevators]) + self.cumulated_reward
-        #res = - sum([len(x) for x in self.people_in_floors[1:]])\
-        #		- sum([len(x.curr_people) for x in self.elevators])\
-        #		+ self.get_arrived_people() + (self.cumulated_reward *10)
+        reward = self.get_arrived_passengers() - sum([len(x) for x in self.floors_information])\
+                - sum([len(x.curr_passengers_in_elv) for x in self.elevators]) + self.cumulated_reward
         self.cumulated_reward = 0
-        #print(res)
-        return res
-    def get_arrived_people(self):
-        # 이 층에서 내리는 인원 리턴.
-        off_people=0
+        return reward
+    def get_arrived_passengers(self) -> int :
+        arrived_passengers=0
         for e in self.elevators:
-            off_people += e.off_people
-            #print(e.off_people)
-            e.off_people=0
-        return off_people
+            arrived_passengers += e.arrived_passengers_num
+            e.arrived_passengers_num = 0
+        return arrived_passengers
 
-    def get_state(self):
-        res = [float(len(elem))/float(self.max_people_in_floor) for idx, elem in enumerate(self.people_in_floors)]
+    def get_state(self) -> list:
+        res = [float(len(elem))/float(self.max_passengers_in_floor) for idx, elem in enumerate(self.floors_information)]
         #엘리베이터에 탑승한 승객들의 목적지를 list형태로 res에 추가. 엘리베이터 갯수만큼 리스트형태로 추가됨.
         for e in self.elevators:
             temp_lst = []
-            for p in e.curr_people:
+            for p in e.curr_passengers_in_elv:
                 temp_lst.append(p.return_dest())
             temp_lst.sort()
-            [res.append((temp_lst[x] +1)/ self.height) if x < len(temp_lst) else res.append(0.) for x in range(self.max_people_in_elevator) ]
+            [res.append((temp_lst[x] +1)/ self.max_floor) if x < len(temp_lst) else res.append(0.) for x in range(self.max_passengers_in_elevator) ]
         for e in self.elevators:
-            res.append(float(e.curr_floor)/float(self.height))
-            res.append(float(len(e.curr_people))/float(e.max_people))
+            res.append(float(e.curr_floor)/float(self.max_floor))
+            res.append(float(len(e.curr_passengers_in_elv))/float(e.max_passengers))
         return res
 
-    # clears the building 
+    
     def empty_building(self):
-        self.people_in_floors = []
-        for idx in range(self.height):
-            self.people_in_floors.append([])
-
+        '''
+        clears the building 
+        '''
+        self.floors_information = []
+        
+        for idx in range(self.max_floor):
+            self.floors_information.append([])
         for e in self.elevators:
             e.empty()
-        self.target = 0
+            
+        self.remain_passengers_num = 0
 
-    def generate_people(self, prob):
-        #generate random people in building and button press in each floor
-        for floor_num in range(0, self.height):
-            if np.random.random() < prob and len(self.people_in_floors[floor_num]) < self.max_people_in_floor:
-                people = np.random.randint(1,6)
-                if len(self.people_in_floors[floor_num]) + people > self.max_people_in_floor:
-                    people = self.max_people_in_floor - (len(self.people_in_floors[floor_num]) + people)
+    def generate_passengers(self, prob : float, passenger_max_num : int = 6):
+        '''
+        generate random people in building and button press in each floor
+        '''
+        for floor_num in range(0, self.max_floor):
+            if np.random.random() < prob and len(self.floors_information[floor_num]) < self.max_passengers_in_floor:
+                passenger_num = np.random.randint(1,passenger_max_num)
+                passenger_num = min(self.max_passengers_in_floor, len(self.floors_information[floor_num]) + passenger_num)
 
-                tmp_list = []
-                for p in range(people):
-                    tmp_list.append(Passenger(nowFloor=floor_num, maxHeight=self.height))
+                additional_passengers = []
+                for p in range(passenger_num):
+                    additional_passengers.append(Passenger(now_floor=floor_num, max_floor=self.max_floor))
                 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@TODO
-                self.people_in_floors[floor_num] += tmp_list
-                self.target += people
+                self.floors_information[floor_num] += additional_passengers
+                self.remain_passengers_num += passenger_num
 
 
     def perform_action(self, action):
         for idx,e in enumerate(self.elevators):
             if action[idx] == 3:
-                # print "unload"
-                if len(e.curr_people) == 0 :
+                '''
+                elevator unloads passengers
+                '''
+                if len(e.curr_passengers_in_elv) == 0 :
                     self.cumulated_reward -= 1
-                res = e.unload_people(self.people_in_floors[e.curr_floor])#, self.max_people_in_floor
-                #for p in res:
-                #	self.people_in_floors[e.curr_floor].append(p)
+                res = e.unload_passengers(self.floors_information[e.curr_floor])#, self.max_people_in_floor
 
             elif action[idx] == 2:
-                # print "load"
-                if self.people_in_floors[e.curr_floor] == 0:
+                '''
+                elevator loads passengers
+                '''
+                if self.floors_information[e.curr_floor] == 0:
                     self.cumulated_reward -= 1
-                self.people_in_floors[e.curr_floor] = e.load_people(self.people_in_floors[e.curr_floor])
+                self.floors_information[e.curr_floor] = e.load_passengers(self.floors_information[e.curr_floor])
 
             elif action[idx] == 1:
-                # print "up"
-                if e.max_height == e.curr_floor - 1:
+                '''
+                elevator goes upstairs.
+                '''
+                if e.max_floor == e.curr_floor - 1:
                     self.cumulated_reward -= 1
                 e.move_up()
 
             elif action[idx] == 0:
-                # print "down"
+                '''
+                elevator goes downstairs. 
+                '''
                 if e.curr_floor == 0 :
                     self.cumulated_reward -= 1                      
                 e.move_down()
 
-    def print_building(self, step):
-        for idx in reversed(list(range(1,self.height))):
+    def print_building(self, step : int):
+        for idx in reversed(list(range(1,self.max_floor))):
             print("=======================================================")
             print("= Floor #%02d ="%idx, end=' ')
             for e in self.elevators:
@@ -127,19 +136,15 @@ class Building(object):
                     print("  Lift #%d"%e.idx, end=' ')
                 else:
                     print("         ", end=' ')
-
             print(" ")
-            # print "=   %c  %c   ="%(self.floor_button[idx].up, self.floor_button[idx].down),
             print("=  Waiting  =", end=' ')
             for e in self.elevators:
                 if e.curr_floor == idx:
-                    print("    %02d   "%len(e.curr_people), end=' ')
+                    print("    %02d   "%len(e.curr_passengers_in_elv), end=' ')
                 else:
                     print("          ", end=' ')
             print(" ")
-            print("=    %03d    ="%len(self.people_in_floors[idx]))
-
-
+            print("=    %03d    ="%len(self.floors_information[idx]))
         print("=======================================================")
         print("= Floor #00 =", end=' ')
         for e in self.elevators:
@@ -147,21 +152,19 @@ class Building(object):
                 print("  Lift #%d"%e.idx, end=' ')
             else:
                 print("         ", end=' ')
-
         print(" ")
-        # print "=   %c  %c   ="%(self.floor_button[idx].up, self.floor_button[idx].down),
         print("=  Arrived  =", end=' ')
         for e in self.elevators:
             if e.curr_floor == 0:
-                print("    %02d   "%len(e.curr_people), end=' ')
+                print("    %02d   "%len(e.curr_passengers_in_elv), end=' ')
             else:
                 print("          ", end=' ')		
         print(" ")
-        print("=    %03d    ="%len(self.people_in_floors[0]))
+        print("=    %03d    ="%len(self.floors_information[0]))
         print("=======================================================")
         print("")
-        print("People to move: %d "%(self.target - len(self.people_in_floors[0])))
-        print("Total # of people: %d"%self.target)
+        print("People to move: %d "%(self.remain_passengers_num - len(self.floors_information[0])))
+        print("Total # of people: %d"%self.remain_passengers_num)
         print("Step: %d"%step)
         print('state : ',self.get_state())
         print('now reward : ',self.get_reward())
