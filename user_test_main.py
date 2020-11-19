@@ -9,7 +9,10 @@ add_people_prob = 0.8
 
 print_interval = 20
 global_step = 0
-
+def is_finish(state):
+    finish_check_1 = sum([len(x) for x in state[0]])
+    finish_check_2 = sum([len(x) for x in state[1]])
+    return not bool(finish_check_1+finish_check_2)
 def main(): 
     parser = argparse.ArgumentParser('parameters')
     parser.add_argument('--test', type=bool, default=False, help="True if test, False if train (default: False)")
@@ -51,15 +54,16 @@ def main():
             reward = building.perform_action([action])
             next_state = building.get_state()
             state = next_state
+            done = is_finish(state)
+            if done or (global_step > 300):
+                done = True
+                break
             if args.test:
                 os.system("cls")
                 building.print_building(global_step)
                 print(action)
                 print('now reward : ',reward)
-                time.sleep(1.5)
-            if done or (global_step > 300):
-                done = True
-                break
+
 
         ave_reward += global_step 
         
