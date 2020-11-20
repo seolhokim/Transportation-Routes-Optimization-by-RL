@@ -10,9 +10,9 @@ add_people_prob = 0.8
 print_interval = 20
 global_step = 0
 def is_finish(state):
-    finish_check_1 = sum([len(x) for x in state[0]])
-    finish_check_2 = sum([len(x) for x in state[1]])
-    return not bool(finish_check_1+finish_check_2)
+    finish_check_1 = (state[0][0][0] == -1)
+    finish_check_2 = (state[1][0][0] == -1)
+    return (finish_check_1 and finish_check_2)
 def main(): 
     parser = argparse.ArgumentParser('parameters')
     parser.add_argument('--test', type=bool, default=False, help="True if test, False if train (default: False)")
@@ -64,6 +64,8 @@ def main():
                 print(action)
                 print('now reward : ',reward)
 
+                print('state[0][0] == -1 : ',state[0][0][0] == -1)
+                print('state[1][0] == -1 : ',state[1][0][0] == -1)
 
         ave_reward += global_step 
         
