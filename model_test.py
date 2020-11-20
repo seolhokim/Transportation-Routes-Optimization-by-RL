@@ -76,27 +76,30 @@ class Agent(nn.Module):
         self.memory = []
         self.floor_encoder = SequenceEncoder(2,40)
         self.elv_encoder = SequenceEncoder(1,10)
-        self.action_1 = nn.Linear(256,128)
+        self.elv_place_encoder = nn.Linear(1,4)
+        self.action_1 = nn.Linear(256+4,128)
         self.action_2 = nn.Linear(128,action_dim)
-        self.value_1 = nn.Linear(256,128)
+        self.value_1 = nn.Linear(256+4,128)
         self.value_2 = nn.Linear(128,1)
         
         self.optimizer = optim.Adam(self.parameters(),lr = learning_rate)
         
-    def get_action(self,floor,elv,softmax_dim = -1):
+    def get_action(self,floor,elv,elv_place,softmax_dim = -1):
         #(batch_size, hidden_size, max_seq_len)
         floor = self.floor_encoder(floor)
         elv = self.elv_encoder(elv)
-        x = torch.cat((floor,elv),-1)
+        elv_place = self.elv_place_encoder(elv_place)
+        x = torch.cat((floor,elv,elv_place),-1)
         x = F.relu(x)
         action = F.relu(self.action_1(x))
         action = self.action_2(action)
         prob = F.softmax(action, dim = softmax_dim)
         return prob
-    def get_value(self,floor,elv):
+    def get_value(self,floor,elv,elv_place):
         floor = self.floor_encoder(floor)
         elv = self.elv_encoder(elv)
-        x = torch.cat((floor,elv),-1)
+        elv_place = self.elv_place_encoder(elv_place)
+        x = torch.cat((floor,elv,elv_place),-1)
         x = F.relu(x)
         
         value = self.value_1(x)
@@ -107,46 +110,53 @@ class Agent(nn.Module):
         self.memory.append(data)
         
     def make_batch(self):
-        state_1_list,state_2_list, action_list, reward_list, next_state_1_list,next_state_2_list, prob_list, done_list = [],[],[],[],[],[],[],[]
+        state_1_list,state_2_list,state_3_list, action_list, reward_list, next_state_1_list,next_state_2_list,next_state_3_list, prob_list, done_list = [],[],[],[],[],[],[],[],[],[]
         for data in self.memory:
-            state_1,state_2,action,reward,next_state_1,next_state_2,prob,done = data
+            state_1,state_2,state_3,action,reward,next_state_1,next_state_2,next_state_3,prob,done = data
             state_1_list.append(state_1)
             state_2_list.append(state_2)
+            state_3_list.append(state_3)
             action_list.append([action])
             reward_list.append([reward])
             prob_list.append([prob])
             next_state_1_list.append(next_state_1)
             next_state_2_list.append(next_state_2)
+            next_state_3_list.append(next_state_3)
             done_mask = 0 if done else 1
             done_list.append([done_mask])
         self.memory = []
         
-        s1,s2,a,r,next_s1,next_s2,done_mask,prob = torch.tensor(state_1_list,dtype=torch.float).to(device),\
+        s1,s2,s3,a,r,next_s1,next_s2,next_s3,done_mask,prob = torch.tensor(state_1_list,dtype=torch.float).to(device),\
                                             torch.tensor(state_2_list,dtype=torch.float).to(device),\
-                                        torch.tensor(action_list),torch.tensor(reward_list).to(device),\
+                                            torch.tensor(state_3_list,dtype=torch.float).to(device),\
+                                        torch.tensor(action_list).to(device),torch.tensor(reward_list).to(device),\
                                         torch.tensor(next_state_1_list,dtype=torch.float).to(device),\
                                         torch.tensor(next_state_2_list,dtype=torch.float).to(device),\
+                                        torch.tensor(next_state_3_list,dtype=torch.float).to(device),\
                                         torch.tensor(done_list,dtype = torch.float).to(device),\
                                         torch.tensor(prob_list).to(device)
-        return s1,s2,a,r,next_s1,next_s2,done_mask,prob
+        return s1.squeeze(1),s2.squeeze(1),s3.squeeze(1),a,r,next_s1.squeeze(1),next_s2.squeeze(1),next_s3.squeeze(1),done_mask,prob
     
-    def train(self):
-        state_1,state_2,action,reward, next_state_1,next_state_2,done_mask,action_prob = self.make_batch()
+    def train(self,epoch):
+        state_1,state_2,state_3,action,reward, next_state_1,next_state_2,next_state_3,done_mask,action_prob = self.make_batch()
 
         for i in range(K_epoch):
-            td_error = reward + gamma * self.get_value(next_state_1,next_state_2) * done_mask
-            delta = td_error - self.get_value(state_1,state_2)
-            delta = delta.detach().numpy()
+            td_error = reward + gamma * self.get_value(next_state_1,next_state_2,next_state_3) * done_mask
+            delta = td_error - self.get_value(state_1,state_2,state_3)
+            if torch.cuda.is_available():
+                delta = delta.cpu().detach().numpy()
+            else:
+                delta = delta.detach().numpy()
             advantage_list = []
             advantage = 0.0
             for delta_t in delta[::-1]:
                 advantage = gamma * lmbda * advantage + delta_t[0]
                 advantage_list.append([advantage])
             advantage_list.reverse()
-            advantage = torch.tensor(advantage_list,dtype = torch.float)
+            advantage = torch.tensor(advantage_list,dtype = torch.float).to(device)
             
             
-            now_action = self.get_action(state_1,state_2,softmax_dim = 1)
+            now_action = self.get_action(state_1,state_2,state_3,softmax_dim = -1)
             now_action = now_action.gather(1,action)
             
             ratio = torch.exp(torch.log(now_action) - torch.log(action_prob))
@@ -154,7 +164,7 @@ class Agent(nn.Module):
             surr1 = ratio * advantage
             surr2 = torch.clamp(ratio , 1-eps_clip, 1 + eps_clip) * advantage
             loss_1 = - torch.min(surr1,surr2).mean()
-            loss_2 = F.smooth_l1_loss(self.get_value(state_1,state_2),td_error.detach())
+            loss_2 = F.smooth_l1_loss(self.get_value(state_1,state_2,state_3),td_error.detach())
             loss = loss_1 + loss_2
             self.optimizer.zero_grad()
             loss.backward()
@@ -181,7 +191,7 @@ def main():
     parser.add_argument("--save_interval", type=int, default = 1000, help = 'save interval')
     parser.add_argument("--print_interval", type=int, default = 20, help = 'print interval')
     args = parser.parse_args()
-    print('args.train : ',args.test)
+    print('args.test : ',args.test)
     print('args.epochs : ', args.epochs)
     print('args.lr_rate : ',args.lr_rate)
     print('args.lift_num : ', args.lift_num)
@@ -202,29 +212,31 @@ def main():
         building.empty_building()
         while building.remain_passengers_num == 0 :
             building.generate_passengers(add_people_prob)
-        floor_state,elv_state = building.get_state()
+        floor_state,elv_state,elv_place_state = building.get_state()
         floor_state = torch.tensor(floor_state).transpose(1,0).unsqueeze(0).float()
+        floor_state = torch.cat((floor_state,-1* torch.ones((1,2,MAX_PASSENGERS_LENGTH - floor_state.shape[2]))),-1)/10.
         elv_state = torch.tensor(elv_state).unsqueeze(0).float()
-        
-        floor_state = torch.cat((floor_state,-1* torch.ones((1,2,MAX_PASSENGERS_LENGTH - floor_state.shape[2]))),-1)
-        elv_state = torch.cat((elv_state,-1* torch.ones((1,1,MAX_ELV_LENGTH - elv_state.shape[2]))),-1)
+        elv_state = torch.cat((elv_state,-1* torch.ones((1,1,MAX_ELV_LENGTH - elv_state.shape[2]))),-1)/10.
+        elv_place_state = torch.tensor(elv_place_state).unsqueeze(0).float()/10.
         done = False
         global_step = 0
         while not done:
             global_step += 1
-            action_prob = model.get_action(floor_state.to(device),elv_state.to(device))[0]
+            action_prob = model.get_action(floor_state.to(device),elv_state.to(device),elv_place_state.to(device))[0]
             m = Categorical(action_prob)
             action = m.sample().item()
             reward = building.perform_action([action])
-            next_floor_state,next_elv_state = building.get_state()
+            next_floor_state,next_elv_state,next_elv_place_state = building.get_state()
             done = is_finish((next_floor_state,next_elv_state))
             next_floor_state = torch.tensor(next_floor_state).transpose(1,0).unsqueeze(0).float()
+            next_floor_state = torch.cat((next_floor_state,-1* torch.ones((1,2,MAX_PASSENGERS_LENGTH - next_floor_state.shape[2]))),-1)/10.
             next_elv_state = torch.tensor(next_elv_state).unsqueeze(0).float()
-            next_floor_state = torch.cat((next_floor_state,-1* torch.ones((1,2,MAX_PASSENGERS_LENGTH - next_floor_state.shape[2]))),-1)
-            next_elv_state = torch.cat((next_elv_state,-1* torch.ones((1,1,MAX_ELV_LENGTH - next_elv_state.shape[2]))),-1)
-            model.put_data((floor_state,elv_state, action, reward/100.0, next_floor_state,next_elv_state, action_prob[action].item(), done))
+            next_elv_state = torch.cat((next_elv_state,-1* torch.ones((1,1,MAX_ELV_LENGTH - next_elv_state.shape[2]))),-1)/10.
+            next_elv_place_state = torch.tensor(next_elv_place_state).unsqueeze(0).float()/10.
+            model.put_data((floor_state.tolist(),elv_state.tolist(),elv_place_state.tolist(), action, reward/100.0, next_floor_state.tolist(),next_elv_state.tolist(), next_elv_place_state.tolist(), action_prob[action].item(), done))
             floor_state = next_floor_state
             elv_state = next_elv_state
+            elv_place_state = next_elv_place_state
             if args.test:
                 os.system("cls")
                 building.print_building(global_step)
@@ -235,6 +247,7 @@ def main():
             if done or (global_step > 300):
                 done = True
                 break
+        model.train(epoch)
         summary.add_scalar('reward', global_step, epoch)
         ave_reward += global_step 
         
