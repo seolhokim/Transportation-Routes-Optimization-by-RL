@@ -9,6 +9,14 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch.distributions import Categorical
 
+if torch.cuda.is_available():
+    device = torch.device("cuda") 
+else:
+    device = 'cpu'
+    
+from tensorboardX import SummaryWriter
+summary = SummaryWriter()
+
 #Hyperparameters
 learning_rate = 0.0005
 gamma         = 0.98
@@ -19,8 +27,15 @@ T_horizon     = 20
 learning_rate = 0.001
 MAX_PASSENGERS_LENGTH = 40
 MAX_ELV_LENGTH = 10
+
+add_people_at_step = 25
+add_people_prob = 0.8
+
+print_interval = 20
+global_step = 0
+
 class SequenceEncoder(nn.Module):
-    def __init__(self,input_dim,encoding_dim = 128,head_num = 16, normalization=True):
+    def __init__(self,input_dim,seq_len,encoding_dim = 128,head_num = 16, normalization=True):
         super(SequenceEncoder,self).__init__()
         self.normalization = normalization
         self.linear_1 = nn.Linear(input_dim,encoding_dim)
@@ -29,15 +44,15 @@ class SequenceEncoder(nn.Module):
         self.conv_1 = nn.Conv1d(encoding_dim,encoding_dim,1)
         self.conv_2 = nn.Conv1d(encoding_dim,encoding_dim*1,1)
         self.norm = nn.BatchNorm1d(encoding_dim*1)
-        self.lstm = nn.LSTM(input_size = encoding_dim,hidden_size = encoding_dim,num_layers = 1,bidirectional=True,batch_first = True)
-        self.linear_2 = nn.Linear(encoding_dim*2,encoding_dim)
+        ##self.lstm = nn.LSTM(input_size = encoding_dim,hidden_size = encoding_dim,num_layers = 1,bidirectional=True,batch_first = True)
+        ##self.linear_2 = nn.Linear(encoding_dim*2,encoding_dim)
+        self.linear_2 = nn.Linear(seq_len,1)
     def forward(self,x):
         '''
         #(1,3,40)
         (batch_size, hidden_size, max_seq_len)
         '''
         x = x.permute(0,2,1) #(batch_size, max_seq_len, hidden_size)
-        #no activation
         x = self.linear_1(x) #(batch_size, max_seq_len, encoding_dim)
         x = x.permute(1,0,2)#(max_seq_len, batch_size, encoding_dim)
         x,_ = self.attention(x,x,x) #(max_seq_len, batch_size, encoding_dim)
@@ -50,16 +65,17 @@ class SequenceEncoder(nn.Module):
         if self.normalization == True:
             x = self.norm(x)
         #x(batch_size, encoding_dim,max_seq_len)
-        x,_ = self.lstm(F.relu(x.transpose(2,1)))
-        x = x[:,-1,:]
-        x = self.linear_2(F.relu(x))
+        ##x,_ = self.lstm(F.relu(x.transpose(2,1)))
+        ##x = x[:,-1,:]
+        ##x = self.linear_2(F.relu(x))
+        x = self.linear_2(F.relu(x)).squeeze(-1)
         return x
 class Agent(nn.Module):
     def __init__(self, action_dim):
         super(Agent,self).__init__()
         self.memory = []
-        self.floor_encoder = SequenceEncoder(2)
-        self.elv_encoder = SequenceEncoder(1)
+        self.floor_encoder = SequenceEncoder(2,40)
+        self.elv_encoder = SequenceEncoder(1,10)
         self.action_1 = nn.Linear(256,128)
         self.action_2 = nn.Linear(128,action_dim)
         self.value_1 = nn.Linear(256,128)
@@ -105,13 +121,13 @@ class Agent(nn.Module):
             done_list.append([done_mask])
         self.memory = []
         
-        s1,s2,a,r,next_s1,next_s2,done_mask,prob = torch.tensor(state_1_list,dtype=torch.float),\
-                                            torch.tensor(state_2_list,dtype=torch.float),\
-                                        torch.tensor(action_list),torch.tensor(reward_list),\
-                                        torch.tensor(next_state_1_list,dtype=torch.float),\
-                                        torch.tensor(next_state_2_list,dtype=torch.float),\
-                                        torch.tensor(done_list,dtype = torch.float),\
-                                        torch.tensor(prob_list)
+        s1,s2,a,r,next_s1,next_s2,done_mask,prob = torch.tensor(state_1_list,dtype=torch.float).to(device),\
+                                            torch.tensor(state_2_list,dtype=torch.float).to(device),\
+                                        torch.tensor(action_list),torch.tensor(reward_list).to(device),\
+                                        torch.tensor(next_state_1_list,dtype=torch.float).to(device),\
+                                        torch.tensor(next_state_2_list,dtype=torch.float).to(device),\
+                                        torch.tensor(done_list,dtype = torch.float).to(device),\
+                                        torch.tensor(prob_list).to(device)
         return s1,s2,a,r,next_s1,next_s2,done_mask,prob
     
     def train(self):
@@ -137,18 +153,17 @@ class Agent(nn.Module):
             
             surr1 = ratio * advantage
             surr2 = torch.clamp(ratio , 1-eps_clip, 1 + eps_clip) * advantage
-            loss = - torch.min(surr1,surr2) + F.smooth_l1_loss(self.get_value(state_1,state_2),td_error.detach())
-            
+            loss_1 = - torch.min(surr1,surr2).mean()
+            loss_2 = F.smooth_l1_loss(self.get_value(state_1,state_2),td_error.detach())
+            loss = loss_1 + loss_2
             self.optimizer.zero_grad()
-            loss.mean().backward()
+            loss.backward()
             self.optimizer.step()
-    
+            if i == 0 :
+                summary.add_scalar('loss/loss_1', loss_1.item(), epoch)
+                summary.add_scalar('loss/loss_2', loss_2.item(), epoch)
 
-add_people_at_step = 25
-add_people_prob = 0.8
 
-print_interval = 20
-global_step = 0
 def is_finish(state):
     finish_check_1 = (state[0][0][0] == -1)
     finish_check_2 = (state[1][0][0] == -1)
@@ -181,6 +196,8 @@ def main():
                         args.max_people_in_elevator)
     ave_reward = 0 
     model = Agent(4)
+    if torch.cuda.is_available():
+        model.cuda()
     for epoch in range(args.epochs):
         building.empty_building()
         while building.remain_passengers_num == 0 :
@@ -195,7 +212,7 @@ def main():
         global_step = 0
         while not done:
             global_step += 1
-            action_prob = model.get_action(floor_state,elv_state)[0]
+            action_prob = model.get_action(floor_state.to(device),elv_state.to(device))[0]
             m = Categorical(action_prob)
             action = m.sample().item()
             reward = building.perform_action([action])
@@ -218,7 +235,7 @@ def main():
             if done or (global_step > 300):
                 done = True
                 break
-
+        summary.add_scalar('reward', global_step, epoch)
         ave_reward += global_step 
         
         if epoch%args.print_interval==0 and epoch!=0:
