@@ -50,9 +50,9 @@ class Elevator(object):
                 self.curr_passengers_in_elv.append(p)
             res = []
         return res
-
-
-    def unload_passengers(self, passengers_in_floor) -> int:
+    def get_passengers_info(self) -> list :
+        return [p.get_dest() for p in self.curr_passengers_in_elv]
+    def unload_passengers(self, passengers_in_floor : list) -> int:
         '''
         function unloads passengers back into the building 
         
@@ -61,29 +61,20 @@ class Elevator(object):
         arrived_passengers = []
         num_in_floor = len(passengers_in_floor)
         self.arrived_passengers_num = 0
-        
         for i in range(len(self.curr_passengers_in_elv)):
             if self.curr_passengers_in_elv[i].dest == self.curr_floor:
                 arrived_passengers.append(i)
-
         #If anyone gets off this floor
         if len(arrived_passengers) !=0:
             self.arrived_passengers_num = len(arrived_passengers)
             arrived_passengers.reverse() #TODO : Debugging
             for i in arrived_passengers:
                 self.curr_passengers_in_elv.pop(i)
+
+        '''
+        for p in ((self.curr_passengers_in_elv)):
+            if p.dest == self.curr_floor:
+                self.curr_passengers_in_elv.remove(p)
+                self.arrived_passengers_num += 1
+        '''
         return self.arrived_passengers_num
-
-
-
-
-
-
-
-
-
-
-
-
-
-

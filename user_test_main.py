@@ -1,30 +1,19 @@
 import argparse
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import torch.optim as optim
-from torch.distributions import Categorical
-from Agent import Agent
 import numpy as np
 import os
 from environment.Building import Building
 import time
 
-
-gamma         = 0.98
-lmbda         = 0.95
-eps_clip      = 0.1
-K_epoch       = 3
-T_horizon     = 20
-
 add_people_at_step = 25
 add_people_prob = 0.8
 
 print_interval = 20
-
 global_step = 0
-
-def main(): #str
+def is_finish(state):
+    finish_check_1 = (state[0][0][0] == -1)
+    finish_check_2 = (state[1][0][0] == -1)
+    return (finish_check_1 and finish_check_2)
+def main(): 
     parser = argparse.ArgumentParser('parameters')
     parser.add_argument('--test', type=bool, default=False, help="True if test, False if train (default: False)")
     parser.add_argument('--epochs', type=int, default=1000, help='number of epochs, (default: 100)')
@@ -50,11 +39,6 @@ def main(): #str
 
     building = Building(args.lift_num, args.building_height, args.max_people_in_floor,\
                         args.max_people_in_elevator)
-    model = Agent((args.building_height)+ args.max_people_in_elevator + (args.lift_num *2),4,args.lr_rate)
-    if args.load_file != 'no':
-        model.load_state_dict(torch.load("./model_weights/"+str(args.load_file)))
-    else:
-        pass
     ave_reward = 0 
     
     for epoch in range(args.epochs):
@@ -65,33 +49,24 @@ def main(): #str
         done = False
         global_step = 0
         while not done:
-            for t in range(T_horizon):
-                global_step += 1
-                
-                action_prob = model.get_action(torch.from_numpy(np.array(state)).float())
-                m = Categorical(action_prob)
-                action = m.sample().item()
-                reward = building.perform_action([action])
+            global_step += 1
+            action = int(input("action"))
+            reward = building.perform_action([action])
+            next_state = building.get_state()
+            state = next_state
+            done = is_finish(state)
+            if done or (global_step > 300):
+                done = True
+                break
+            if args.test:
+                os.system("cls")
+                building.print_building(global_step)
+                print(action)
+                print('now reward : ',reward)
 
-                next_state = building.get_state()
-                finished = next_state.copy()
-                del finished[-2:]
-                if (sum(finished) == 0.0) :
-                    reward = 100. 
-                    done = True
-                model.put_data((state, action, reward/100.0, next_state, action_prob[action].item(), done))
-                state = next_state
-                if args.test:
-                    os.system("cls")
-                    building.print_building(global_step)
-                    print(action)
-                    print('now reward : ',reward)
-                    time.sleep(1.5)
-                if done or (global_step > 300):
-                    done = True
-                    break
+                print('state[0][0] == -1 : ',state[0][0][0] == -1)
+                print('state[1][0] == -1 : ',state[1][0][0] == -1)
 
-            model.train()
         ave_reward += global_step 
         
         if epoch%args.print_interval==0 and epoch!=0:
@@ -99,6 +74,5 @@ def main(): #str
             ave_reward = 0
         #if (epoch % args.save_interval == 0 )& (epoch != 0):
         #    torch.save(model.state_dict(), './model_weights/model_'+str(epoch))
-    torch.save(model.state_dict(), './model_weights/model')
 if __name__ == '__main__':
     main()
