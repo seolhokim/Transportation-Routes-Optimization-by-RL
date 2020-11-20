@@ -18,7 +18,6 @@ from tensorboardX import SummaryWriter
 summary = SummaryWriter()
 
 #Hyperparameters
-learning_rate = 0.0005
 gamma         = 0.98
 lmbda         = 0.95
 eps_clip      = 0.1
@@ -62,8 +61,8 @@ class SequenceEncoder(nn.Module):
         x_ = self.conv_2(x_) #(batch_size, encoding_dim,max_seq_len)
         
         x = x_ + x
-        if self.normalization == True:
-            x = self.norm(x)
+        ####if self.normalization == True:
+        ####    x = self.norm(x)
         #x(batch_size, encoding_dim,max_seq_len)
         ##x,_ = self.lstm(F.relu(x.transpose(2,1)))
         ##x = x[:,-1,:]
@@ -76,10 +75,11 @@ class Agent(nn.Module):
         self.memory = []
         self.floor_encoder = SequenceEncoder(2,40)
         self.elv_encoder = SequenceEncoder(1,10)
-        self.elv_place_encoder = nn.Linear(1,4)
-        self.action_1 = nn.Linear(256+4,128)
+        self.elv_place_encoder_1 = nn.Linear(1,32)
+        self.elv_place_encoder_2 = nn.Linear(32,64)
+        self.action_1 = nn.Linear(256+64,128)
         self.action_2 = nn.Linear(128,action_dim)
-        self.value_1 = nn.Linear(256+4,128)
+        self.value_1 = nn.Linear(256+64,128)
         self.value_2 = nn.Linear(128,1)
         
         self.optimizer = optim.Adam(self.parameters(),lr = learning_rate)
@@ -88,9 +88,10 @@ class Agent(nn.Module):
         #(batch_size, hidden_size, max_seq_len)
         floor = self.floor_encoder(floor)
         elv = self.elv_encoder(elv)
-        elv_place = self.elv_place_encoder(elv_place)
+        elv_place = F.relu(self.elv_place_encoder_1(elv_place))
+        elv_place = (self.elv_place_encoder_2(elv_place))
         x = torch.cat((floor,elv,elv_place),-1)
-        x = F.relu(x)
+        #x = F.relu(x)
         action = F.relu(self.action_1(x))
         action = self.action_2(action)
         prob = F.softmax(action, dim = softmax_dim)
@@ -98,9 +99,10 @@ class Agent(nn.Module):
     def get_value(self,floor,elv,elv_place):
         floor = self.floor_encoder(floor)
         elv = self.elv_encoder(elv)
-        elv_place = self.elv_place_encoder(elv_place)
+        elv_place = F.relu(self.elv_place_encoder_1(elv_place))
+        elv_place = (self.elv_place_encoder_2(elv_place))
         x = torch.cat((floor,elv,elv_place),-1)
-        x = F.relu(x)
+        #x = F.relu(x)
         
         value = self.value_1(x)
         value = self.value_2(value)
@@ -181,14 +183,14 @@ def is_finish(state):
 def main(): 
     parser = argparse.ArgumentParser('parameters')
     parser.add_argument('--test', type=bool, default=False, help="True if test, False if train (default: False)")
-    parser.add_argument('--epochs', type=int, default=1000, help='number of epochs, (default: 100)')
+    parser.add_argument('--epochs', type=int, default=10000, help='number of epochs, (default: 100)')
     parser.add_argument('--lr_rate', type=float, default=0.0001, help='learning rate (default : 0.0001)')
     parser.add_argument('--lift_num', type=int, default=1, help='number of elevators ')
     parser.add_argument('--building_height', type=int, default=5, help='building height ')
     parser.add_argument('--max_people_in_floor', type=int, default=8, help='maximum people in one floor')
     parser.add_argument('--max_people_in_elevator', type=int, default=8, help='maximum people in one elevator')
     parser.add_argument("--load_file", type=str, default = 'no', help = 'load initial parameters')
-    parser.add_argument("--save_interval", type=int, default = 1000, help = 'save interval')
+    parser.add_argument("--save_interval", type=int, default = 500, help = 'save interval')
     parser.add_argument("--print_interval", type=int, default = 20, help = 'print interval')
     args = parser.parse_args()
     print('args.test : ',args.test)
@@ -204,7 +206,7 @@ def main():
 
     building = Building(args.lift_num, args.building_height, args.max_people_in_floor,\
                         args.max_people_in_elevator)
-    ave_reward = 0 
+    ave_steps = 0 
     model = Agent(4)
     if torch.cuda.is_available():
         model.cuda()
@@ -249,12 +251,12 @@ def main():
                 break
         model.train(epoch)
         summary.add_scalar('reward', global_step, epoch)
-        ave_reward += global_step 
+        ave_steps += global_step 
         
         if epoch%args.print_interval==0 and epoch!=0:
-            print("# of episode :{}, avg score : {:.1f}".format(epoch, ave_reward/args.print_interval))
-            ave_reward = 0
-        #if (epoch % args.save_interval == 0 )& (epoch != 0):
-        #    torch.save(model.state_dict(), './model_weights/model_'+str(epoch))
+            print("# of episode :{}, avg episodes : {:.1f}".format(epoch, ave_steps/args.print_interval))
+            ave_steps = 0
+        if (epoch % args.save_interval == 0 )& (epoch != 0):
+            torch.save(model.state_dict(), './model_weights/model_'+str(epoch))
 if __name__ == '__main__':
     main()
