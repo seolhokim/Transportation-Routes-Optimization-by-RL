@@ -49,7 +49,8 @@ class Building(object):
         elv_passengers = [x for x in elv_passengers if x != []]
         if len(elv_passengers) == 0 :
             elv_passengers.append([-1])
-        return floor_passengers,elv_passengers
+        elevators_floors = [e.curr_floor for e in self.elevators]
+        return floor_passengers,elv_passengers,elevators_floors
     
     def empty_building(self):
         '''
