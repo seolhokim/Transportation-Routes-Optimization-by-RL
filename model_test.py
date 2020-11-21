@@ -40,6 +40,7 @@ class SequenceEncoder(nn.Module):
         self.linear_1 = nn.Linear(input_dim,encoding_dim)
         self.attention = nn.MultiheadAttention(encoding_dim, head_num)
         
+        self.conv_0 = nn.Conv1d(input_dim,encoding_dim,1)
         self.conv_1 = nn.Conv1d(encoding_dim,encoding_dim,1)
         self.conv_2 = nn.Conv1d(encoding_dim,encoding_dim*1,1)
         self.norm = nn.BatchNorm1d(encoding_dim*1)
@@ -48,14 +49,14 @@ class SequenceEncoder(nn.Module):
         self.linear_2 = nn.Linear(seq_len,1)
     def forward(self,x):
         '''
-        #(1,3,40)
         (batch_size, hidden_size, max_seq_len)
         '''
-        x = x.permute(0,2,1) #(batch_size, max_seq_len, hidden_size)
-        x = self.linear_1(x) #(batch_size, max_seq_len, encoding_dim)
-        x = x.permute(1,0,2)#(max_seq_len, batch_size, encoding_dim)
-        x,_ = self.attention(x,x,x) #(max_seq_len, batch_size, encoding_dim)
-        x = x.permute(1,2,0) #(batch_size, encoding_dim,max_seq_len)
+        ######x = x.permute(0,2,1) #(batch_size, max_seq_len, hidden_size)
+        ######x = self.linear_1(x) #(batch_size, max_seq_len, encoding_dim)
+        ######x = x.permute(1,0,2)#(max_seq_len, batch_size, encoding_dim)
+        ######x,_ = self.attention(x,x,x) #(max_seq_len, batch_size, encoding_dim)
+        ######x = x.permute(1,2,0) #(batch_size, encoding_dim,max_seq_len)
+        x = F.relu(self.conv_0(x))
         
         x_ = F.relu(self.conv_1(x)) #(batch_size, encoding_dim,max_seq_len)
         x_ = self.conv_2(x_) #(batch_size, encoding_dim,max_seq_len)
@@ -208,6 +209,10 @@ def main():
                         args.max_people_in_elevator)
     ave_steps = 0 
     model = Agent(4)
+    if args.load_file != 'no':
+        model.load_state_dict(torch.load("./model_weights/"+str(args.load_file)))
+    else:
+        pass
     if torch.cuda.is_available():
         model.cuda()
     for epoch in range(args.epochs):
@@ -230,6 +235,8 @@ def main():
             reward = building.perform_action([action])
             next_floor_state,next_elv_state,next_elv_place_state = building.get_state()
             done = is_finish((next_floor_state,next_elv_state))
+            if done :
+                reward += 100
             next_floor_state = torch.tensor(next_floor_state).transpose(1,0).unsqueeze(0).float()
             next_floor_state = torch.cat((next_floor_state,-1* torch.ones((1,2,MAX_PASSENGERS_LENGTH - next_floor_state.shape[2]))),-1)/10.
             next_elv_state = torch.tensor(next_elv_state).unsqueeze(0).float()
@@ -251,7 +258,7 @@ def main():
                 break
         model.train(epoch)
         summary.add_scalar('reward', global_step, epoch)
-        ave_steps += global_step 
+        ave_steps += global_step
         
         if epoch%args.print_interval==0 and epoch!=0:
             print("# of episode :{}, avg episodes : {:.1f}".format(epoch, ave_steps/args.print_interval))
