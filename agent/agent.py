@@ -8,14 +8,12 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.distributions import Categorical
+from tensorboardX import SummaryWriter
 
 if torch.cuda.is_available():
     device = torch.device("cuda") 
 else:
     device = 'cpu'
-    
-from tensorboardX import SummaryWriter
-summary = SummaryWriter()
 
 #Hyperparameters
 gamma         = 0.98
@@ -203,11 +201,11 @@ def main():
     print('args.load_file : ',args.load_file)
     print('args.save_interval :',args.save_interval)
     print('args.print_interval :',args.print_interval)
-
+    summary = SummaryWriter()
     building = Building(args.lift_num, args.building_height, args.max_people_in_floor,\
                         args.max_people_in_elevator)
     ave_steps = 0 
-    model = Agent(4)
+    model = Agent(action_dim = 4)
     if torch.cuda.is_available():
         model.cuda()
     for epoch in range(args.epochs):

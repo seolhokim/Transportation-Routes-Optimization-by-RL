@@ -117,7 +117,8 @@ class Building(object):
                     penalty_lst.append(-1)
                 arrived_passengers_num_lst.append(arrived_passengers_num)
 
-        reward = sum(arrived_passengers_num_lst) + sum(penalty_lst) - self.get_remain_all_passengers()
+        #reward = sum(arrived_passengers_num_lst) + sum(penalty_lst) - self.get_remain_all_passengers()
+        reward = + sum(penalty_lst) - self.get_remain_all_passengers()
         return reward
         #return self.get_reward()
     
