@@ -8,14 +8,12 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.distributions import Categorical
+from tensorboardX import SummaryWriter
 
 if torch.cuda.is_available():
     device = torch.device("cuda") 
 else:
     device = 'cpu'
-    
-from tensorboardX import SummaryWriter
-summary = SummaryWriter()
 
 #Hyperparameters
 gamma         = 0.98
@@ -40,7 +38,6 @@ class SequenceEncoder(nn.Module):
         self.linear_1 = nn.Linear(input_dim,encoding_dim)
         self.attention = nn.MultiheadAttention(encoding_dim, head_num)
         
-        self.conv_0 = nn.Conv1d(input_dim,encoding_dim,1)#hidden_size
         self.conv_1 = nn.Conv1d(encoding_dim,encoding_dim,1)
         self.conv_2 = nn.Conv1d(encoding_dim,encoding_dim*1,1)
         self.norm = nn.BatchNorm1d(encoding_dim*1)
@@ -49,16 +46,16 @@ class SequenceEncoder(nn.Module):
         self.linear_2 = nn.Linear(seq_len,1)
     def forward(self,x):
         '''
+        #(1,3,40)
         (batch_size, hidden_size, max_seq_len)
         '''
-        ######x = x.permute(0,2,1) #(batch_size, max_seq_len, hidden_size)
-        ######x = self.linear_1(x) #(batch_size, max_seq_len, encoding_dim)
-        ######x = x.permute(1,0,2)#(max_seq_len, batch_size, encoding_dim)
-        ######x,_ = self.attention(x,x,x) #(max_seq_len, batch_size, encoding_dim)
-        ######x = x.permute(1,2,0) #(batch_size, encoding_dim,max_seq_len)
-        x = (self.conv_0(x))
+        x = x.permute(0,2,1) #(batch_size, max_seq_len, hidden_size)
+        x = self.linear_1(x) #(batch_size, max_seq_len, encoding_dim)
+        x = x.permute(1,0,2)#(max_seq_len, batch_size, encoding_dim)
+        x,_ = self.attention(x,x,x) #(max_seq_len, batch_size, encoding_dim)
+        x = x.permute(1,2,0) #(batch_size, encoding_dim,max_seq_len)
         
-        x_ = F.relu(self.conv_1(F.relu(x))) #(batch_size, encoding_dim,max_seq_len)
+        x_ = F.relu(self.conv_1(x)) #(batch_size, encoding_dim,max_seq_len)
         x_ = self.conv_2(x_) #(batch_size, encoding_dim,max_seq_len)
         
         x = x_ + x
@@ -68,8 +65,7 @@ class SequenceEncoder(nn.Module):
         ##x,_ = self.lstm(F.relu(x.transpose(2,1)))
         ##x = x[:,-1,:]
         ##x = self.linear_2(F.relu(x))
-        #x = self.linear_2(F.relu(x)).squeeze(-1)
-        x = F.relu(x)
+        x = self.linear_2(F.relu(x)).squeeze(-1)
         return x
 class Agent(nn.Module):
     def __init__(self, action_dim):
@@ -77,27 +73,23 @@ class Agent(nn.Module):
         self.memory = []
         self.floor_encoder = SequenceEncoder(2,40)
         self.elv_encoder = SequenceEncoder(1,10)
-        self.elv_place_encoder = SequenceEncoder(1,1)
-        self.all_encoder = SequenceEncoder(128,51)
-        self.linear_1 = nn.Linear(51,1)
-        self.action_1 = nn.Linear(128,64)
-        self.action_2 = nn.Linear(64,action_dim)
-        self.value_1 = nn.Linear(128,64)
-        self.value_2 = nn.Linear(64,1)
-        clip_value = 1
+        self.elv_place_encoder_1 = nn.Linear(1,32)
+        self.elv_place_encoder_2 = nn.Linear(32,64)
+        self.action_1 = nn.Linear(256+64,128)
+        self.action_2 = nn.Linear(128,action_dim)
+        self.value_1 = nn.Linear(256+64,128)
+        self.value_2 = nn.Linear(128,1)
+        
         self.optimizer = optim.Adam(self.parameters(),lr = learning_rate)
-        for p in self.parameters():
-            p.register_hook(lambda grad: torch.clamp(grad, -clip_value, clip_value))
+        
     def get_action(self,floor,elv,elv_place,softmax_dim = -1):
         #(batch_size, hidden_size, max_seq_len)
         floor = self.floor_encoder(floor)
         elv = self.elv_encoder(elv)
-        elv_place = self.elv_place_encoder(elv_place)
+        elv_place = F.relu(self.elv_place_encoder_1(elv_place))
+        elv_place = (self.elv_place_encoder_2(elv_place))
         x = torch.cat((floor,elv,elv_place),-1)
-        x = self.all_encoder(x)
-        x = F.relu(x)
-        x = self.linear_1(x).squeeze(-1)
-        x = F.relu(x)
+        #x = F.relu(x)
         action = F.relu(self.action_1(x))
         action = self.action_2(action)
         prob = F.softmax(action, dim = softmax_dim)
@@ -105,13 +97,11 @@ class Agent(nn.Module):
     def get_value(self,floor,elv,elv_place):
         floor = self.floor_encoder(floor)
         elv = self.elv_encoder(elv)
-        elv_place = self.elv_place_encoder(elv_place)
+        elv_place = F.relu(self.elv_place_encoder_1(elv_place))
+        elv_place = (self.elv_place_encoder_2(elv_place))
         x = torch.cat((floor,elv,elv_place),-1)
-        x = self.all_encoder(x)
-        x = F.relu(x)
-        x = self.linear_1(x).squeeze(-1)
-        x = F.relu(x)
-
+        #x = F.relu(x)
+        
         value = self.value_1(x)
         value = self.value_2(value)
         return value
@@ -211,15 +201,11 @@ def main():
     print('args.load_file : ',args.load_file)
     print('args.save_interval :',args.save_interval)
     print('args.print_interval :',args.print_interval)
-
+    summary = SummaryWriter()
     building = Building(args.lift_num, args.building_height, args.max_people_in_floor,\
                         args.max_people_in_elevator)
     ave_steps = 0 
-    model = Agent(4)
-    if args.load_file != 'no':
-        model.load_state_dict(torch.load("./model_weights/"+str(args.load_file)))
-    else:
-        pass
+    model = Agent(action_dim = 4)
     if torch.cuda.is_available():
         model.cuda()
     for epoch in range(args.epochs):
@@ -231,7 +217,7 @@ def main():
         floor_state = torch.cat((floor_state,-1* torch.ones((1,2,MAX_PASSENGERS_LENGTH - floor_state.shape[2]))),-1)/10.
         elv_state = torch.tensor(elv_state).unsqueeze(0).float()
         elv_state = torch.cat((elv_state,-1* torch.ones((1,1,MAX_ELV_LENGTH - elv_state.shape[2]))),-1)/10.
-        elv_place_state = torch.tensor(elv_place_state).unsqueeze(0).unsqueeze(0).float()/10.
+        elv_place_state = torch.tensor(elv_place_state).unsqueeze(0).float()/10.
         done = False
         global_step = 0
         while not done:
@@ -242,13 +228,11 @@ def main():
             reward = building.perform_action([action])
             next_floor_state,next_elv_state,next_elv_place_state = building.get_state()
             done = is_finish((next_floor_state,next_elv_state))
-            if done :
-                reward += 100
             next_floor_state = torch.tensor(next_floor_state).transpose(1,0).unsqueeze(0).float()
             next_floor_state = torch.cat((next_floor_state,-1* torch.ones((1,2,MAX_PASSENGERS_LENGTH - next_floor_state.shape[2]))),-1)/10.
             next_elv_state = torch.tensor(next_elv_state).unsqueeze(0).float()
             next_elv_state = torch.cat((next_elv_state,-1* torch.ones((1,1,MAX_ELV_LENGTH - next_elv_state.shape[2]))),-1)/10.
-            next_elv_place_state = torch.tensor(next_elv_place_state).unsqueeze(0).unsqueeze(0).float()/10.
+            next_elv_place_state = torch.tensor(next_elv_place_state).unsqueeze(0).float()/10.
             model.put_data((floor_state.tolist(),elv_state.tolist(),elv_place_state.tolist(), action, reward/100.0, next_floor_state.tolist(),next_elv_state.tolist(), next_elv_place_state.tolist(), action_prob[action].item(), done))
             floor_state = next_floor_state
             elv_state = next_elv_state
@@ -265,7 +249,7 @@ def main():
                 break
         model.train(epoch)
         summary.add_scalar('reward', global_step, epoch)
-        ave_steps += global_step
+        ave_steps += global_step 
         
         if epoch%args.print_interval==0 and epoch!=0:
             print("# of episode :{}, avg episodes : {:.1f}".format(epoch, ave_steps/args.print_interval))
