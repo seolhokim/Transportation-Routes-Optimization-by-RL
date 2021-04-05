@@ -51,7 +51,8 @@ class Elevator(object):
             res = []
         return res
     def get_passengers_info(self) -> list :
-        return [p.get_dest() for p in self.curr_passengers_in_elv]
+        return sorted([p.get_dest() for p in self.curr_passengers_in_elv])
+        
     def unload_passengers(self, passengers_in_floor : list) -> int:
         '''
         function unloads passengers back into the building 

@@ -43,6 +43,7 @@ class Building(object):
         floor_passengers = [[[floor,passenger.get_dest()] for passenger in passengers] for floor, passengers in enumerate(self.floors_information)]
         floor_passengers = [x for x in floor_passengers if x != []]
         floor_passengers = [y for x in floor_passengers for y in x]
+        floor_passengers = sorted(floor_passengers, key = lambda x: (x[0], x[1]))
         if len(floor_passengers) == 0 :
             floor_passengers.append([-1,-1])
         elv_passengers = [e.get_passengers_info() for e in self.elevators]
