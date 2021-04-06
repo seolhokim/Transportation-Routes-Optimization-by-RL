@@ -9,7 +9,7 @@ class Building(object):
     Building controls elevators and passengers.
     It sets constraints and operates entire environment.
     '''
-    def __init__(self, total_elevator_num : int, max_floor : int, max_passengers_in_floor : int,max_passengers_in_elevator : int, elevator_capacity : int = 10):
+    def __init__(self, total_elevator_num : int, max_floor : int, max_passengers_in_floor : int,max_passengers_in_elevator : int):
         '''
         remain_passengers_num(int) : remain passengers in building
         total_elevator_num(int) : total number of elevator
@@ -26,7 +26,7 @@ class Building(object):
         self.max_passengers_in_elevator = max_passengers_in_elevator
         self.elevators = []
         for idx in range(total_elevator_num):
-            self.elevators.append(Elevator(idx, elevator_capacity, max_floor))
+            self.elevators.append(Elevator(idx, max_passengers_in_elevator, max_floor))
         self.max_floor = max_floor
         self.floors_information = []
         for idx in range(max_floor):

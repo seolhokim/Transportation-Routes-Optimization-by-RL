@@ -29,36 +29,40 @@ global_step = 0
 
 
 class Agent(nn.Module):
-    def __init__(self, action_dim):
+    def __init__(self, lift_num, building_height, max_people_in_floor, max_people_in_elevator,action_dim):
         super(Agent,self).__init__()
         self.memory = []
         self.maxpool = nn.MaxPool1d(2)
+        '''
+        floor,elv,elv_place
+        floor shape : batch , 2 , (building_height * max_people_in_floor)
+        elv shape : batch , lift_num , max_people_in_elevator
+        elv_pace shape : batch , lift_num
+        '''
+        ##actor
         
-        #self.ac_floor = nn.Linear(80,160)
-        #self.ac_elv = nn.Linear(10,20)
-        #self.ac_elv_place = nn.Linear(1,2)
         self.ac_floor = nn.Conv1d(2,32,3,padding=1)
-        self.ac_elv = nn.Conv1d(1,16,3,padding=1)
-        self.ac_elv_place = nn.Linear(1,16)
+        self.ac_elv = nn.Conv1d(lift_num,16,3,padding=1)
+        self.ac_elv_place = nn.Linear(lift_num,16)
         
         self.ac_floor_1 = nn.Conv1d(32,32,3,padding=1)
         self.ac_elv_1 = nn.Conv1d(16,16,3,padding=1)
         
-        self.ac_1 = nn.Linear(640+80+16,360)
+        self.ac_1 = nn.Linear(int(32*(building_height * max_people_in_floor)*(1/2)+16*max_people_in_elevator*(1/2)+16),360)
         self.ac_2 = nn.Linear(360,action_dim)
         
-        #self.va_floor = nn.Linear(80,160)
-        #self.va_elv = nn.Linear(10,20)
-        #self.va_elv_place = nn.Linear(1,2)
+        
+        ##value
         self.va_floor = nn.Conv1d(2,32,3,padding=1)
-        self.va_elv = nn.Conv1d(1,16,3,padding=1)
-        self.va_elv_place = nn.Linear(1,16)
+        self.va_elv = nn.Conv1d(lift_num,16,3,padding=1)
+        self.va_elv_place = nn.Linear(lift_num,16)
         
         self.va_floor_1 = nn.Conv1d(32,32,3,padding=1)
         self.va_elv_1 = nn.Conv1d(16,16,3,padding=1)
         
-        self.va_1 = nn.Linear(640+80+16,360)
+        self.va_1 = nn.Linear(int(32*(building_height * max_people_in_floor)*(1/2)+16*max_people_in_elevator*(1/2)+16),360)
         self.va_2 = nn.Linear(360,action_dim)
+        
         
         
         self.minibatch_size = 64
@@ -71,10 +75,6 @@ class Agent(nn.Module):
         self.optimizer = optim.Adam(self.parameters(),lr = self.lr_rate)
     def get_action(self,floor,elv,elv_place,softmax_dim = -1):
         batch_size = floor.shape[0]
-        #floor = floor.view(batch_size,-1)
-        #elv = elv.view(batch_size,-1)
-        #elv_place = elv_place.view(batch_size,-1)
-        
         
         floor = self.maxpool(torch.relu(self.ac_floor(floor)))
         floor = (torch.relu(self.ac_floor_1(floor)))
@@ -93,10 +93,6 @@ class Agent(nn.Module):
         return prob
     def get_value(self,floor,elv,elv_place):
         batch_size = floor.shape[0]
-        #floor = floor.view(batch_size,-1)
-        #elv = elv.view(batch_size,-1)
-        #elv_place = elv_place.view(batch_size,-1)
-        
         
         floor = self.maxpool(torch.relu(self.va_floor(floor)))
         floor = (torch.relu(self.va_floor_1(floor)))

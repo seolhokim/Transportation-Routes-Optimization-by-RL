@@ -32,15 +32,15 @@ else:
     device = 'cpu'
 
 def is_finish(state):
-    finish_check_1 = (state[0][0][0] == -1)
-    finish_check_2 = (state[1][0][0] == -1)
+    finish_check_1 = (state[0][0][0][0] == -0.1)
+    finish_check_2 = (state[1][0][0][0] == -0.1)
     return (finish_check_1 and finish_check_2)
 
 def state_preprocessing(floor_state,elv_state,elv_place_state):
     floor_state = torch.tensor(floor_state).transpose(1,0).unsqueeze(0).float()
     floor_state = torch.cat((floor_state,-1* torch.ones((1,2,args.building_height*args.max_people_in_floor- floor_state.shape[2]))),-1)/10.
     elv_state = [elv_state[idx]+([-1] * (args.max_people_in_elevator- len(elv_state[idx]))) for idx in range(len(elv_state))]
-    elv_state = torch.tensor(elv_state).unsqueeze(0).float()
+    elv_state = torch.tensor(elv_state).unsqueeze(0).float()/10.
     
     elv_place_state = torch.tensor(elv_place_state).unsqueeze(0).float()/10.
     return floor_state.to(device),elv_state.to(device),elv_place_state.to(device)
@@ -71,9 +71,10 @@ def main():
 
     building = Building(args.lift_num, args.building_height, args.max_people_in_floor,\
                         args.max_people_in_elevator)
-    
     ave_steps = 0 
-    agent = Agent(4)
+    action_dim = 4
+    agent = Agent(args.lift_num, args.building_height, args.max_people_in_floor,\
+                        args.max_people_in_elevator,action_dim)
 
     summary = SummaryWriter()
     if torch.cuda.is_available():
@@ -97,9 +98,8 @@ def main():
             reward = building.perform_action([action])
             next_floor_state,next_elv_state,next_elv_place_state = building.get_state()
 
-            done = is_finish((next_floor_state,next_elv_state))
             next_floor_state,next_elv_state,next_elv_place_state = state_preprocessing(next_floor_state,next_elv_state,next_elv_place_state)
-
+            done = is_finish((next_floor_state,next_elv_state))
             agent.put_data((floor_state.cpu().tolist(),elv_state.cpu().tolist(),elv_place_state.cpu().tolist(), action, reward/100.0, next_floor_state.cpu().tolist(),next_elv_state.cpu().tolist(), next_elv_place_state.cpu().tolist(), action_prob[action].item(), done))
             score += reward
             if args.test:
@@ -113,7 +113,9 @@ def main():
                 done = True
             if done : 
                 score_lst.append(score)
+                summary.add_scalar('reward', score, epoch)
                 score = 0
+                global_step = 0
                 building.empty_building()
                 while building.remain_passengers_num == 0 :
                     building.generate_passengers(add_people_prob)
@@ -125,7 +127,7 @@ def main():
                 elv_place_state = next_elv_place_state
 
         agent.train(summary,epoch)
-        summary.add_scalar('reward', global_step, epoch)
+
         ave_steps += global_step 
 
         if epoch%args.print_interval==0 and epoch!=0:
@@ -133,7 +135,8 @@ def main():
             score_lst = []
 
         if (epoch % args.save_interval == 0 )& (epoch != 0):
-            torch.save(model.state_dict(), './model_weights/model_'+str(epoch))
+            torch.save(agent.state_dict(), './model_weights/model_'+str(epoch))
+
 
 if __name__ == '__main__':
     main()
