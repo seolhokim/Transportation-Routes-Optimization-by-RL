@@ -61,7 +61,7 @@ class Agent(nn.Module):
         self.va_elv_1 = nn.Conv1d(16,16,3,padding=1)
         
         self.va_1 = nn.Linear(int(32*(building_height * max_people_in_floor)*(1/2)+16*max_people_in_elevator*(1/2)+16),360)
-        self.va_2 = nn.Linear(360,action_dim)
+        self.va_2 = nn.Linear(360,1)
         
         
         

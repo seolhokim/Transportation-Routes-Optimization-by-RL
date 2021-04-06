@@ -13,6 +13,7 @@ import numpy as np
 import os
 import time
 
+os.makedirs('./model_weights', exist_ok=True)
 gamma         = 0.98
 lmbda         = 0.95
 eps_clip      = 0.1
