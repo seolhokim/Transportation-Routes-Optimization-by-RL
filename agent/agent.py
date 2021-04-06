@@ -16,12 +16,8 @@ else:
     device = 'cpu'
 
 #Hyperparameters
-gamma         = 0.98
-lmbda         = 0.95
-eps_clip      = 0.1
-K_epoch       = 3
-T_horizon     = 20
-learning_rate = 0.001
+
+K_epoch       = 10
 MAX_PASSENGERS_LENGTH = 40
 MAX_ELV_LENGTH = 10
 
@@ -31,80 +27,90 @@ add_people_prob = 0.8
 print_interval = 20
 global_step = 0
 
-class SequenceEncoder(nn.Module):
-    def __init__(self,input_dim,seq_len,encoding_dim = 128,head_num = 16, normalization=True):
-        super(SequenceEncoder,self).__init__()
-        self.normalization = normalization
-        self.linear_1 = nn.Linear(input_dim,encoding_dim)
-        self.attention = nn.MultiheadAttention(encoding_dim, head_num)
-        
-        self.conv_1 = nn.Conv1d(encoding_dim,encoding_dim,1)
-        self.conv_2 = nn.Conv1d(encoding_dim,encoding_dim*1,1)
-        self.norm = nn.BatchNorm1d(encoding_dim*1)
-        ##self.lstm = nn.LSTM(input_size = encoding_dim,hidden_size = encoding_dim,num_layers = 1,bidirectional=True,batch_first = True)
-        ##self.linear_2 = nn.Linear(encoding_dim*2,encoding_dim)
-        self.linear_2 = nn.Linear(seq_len,1)
-    def forward(self,x):
-        '''
-        #(1,3,40)
-        (batch_size, hidden_size, max_seq_len)
-        '''
-        x = x.permute(0,2,1) #(batch_size, max_seq_len, hidden_size)
-        x = self.linear_1(x) #(batch_size, max_seq_len, encoding_dim)
-        x = x.permute(1,0,2)#(max_seq_len, batch_size, encoding_dim)
-        x,_ = self.attention(x,x,x) #(max_seq_len, batch_size, encoding_dim)
-        x = x.permute(1,2,0) #(batch_size, encoding_dim,max_seq_len)
-        
-        x_ = F.relu(self.conv_1(x)) #(batch_size, encoding_dim,max_seq_len)
-        x_ = self.conv_2(x_) #(batch_size, encoding_dim,max_seq_len)
-        
-        x = x_ + x
-        ####if self.normalization == True:
-        ####    x = self.norm(x)
-        #x(batch_size, encoding_dim,max_seq_len)
-        ##x,_ = self.lstm(F.relu(x.transpose(2,1)))
-        ##x = x[:,-1,:]
-        ##x = self.linear_2(F.relu(x))
-        x = self.linear_2(F.relu(x)).squeeze(-1)
-        return x
+
 class Agent(nn.Module):
     def __init__(self, action_dim):
         super(Agent,self).__init__()
         self.memory = []
-        self.floor_encoder = SequenceEncoder(2,40)
-        self.elv_encoder = SequenceEncoder(1,10)
-        self.elv_place_encoder_1 = nn.Linear(1,32)
-        self.elv_place_encoder_2 = nn.Linear(32,64)
-        self.action_1 = nn.Linear(256+64,128)
-        self.action_2 = nn.Linear(128,action_dim)
-        self.value_1 = nn.Linear(256+64,128)
-        self.value_2 = nn.Linear(128,1)
+        self.maxpool = nn.MaxPool1d(2)
         
-        self.optimizer = optim.Adam(self.parameters(),lr = learning_rate)
+        #self.ac_floor = nn.Linear(80,160)
+        #self.ac_elv = nn.Linear(10,20)
+        #self.ac_elv_place = nn.Linear(1,2)
+        self.ac_floor = nn.Conv1d(2,32,3,padding=1)
+        self.ac_elv = nn.Conv1d(1,16,3,padding=1)
+        self.ac_elv_place = nn.Linear(1,16)
         
+        self.ac_floor_1 = nn.Conv1d(32,32,3,padding=1)
+        self.ac_elv_1 = nn.Conv1d(16,16,3,padding=1)
+        
+        self.ac_1 = nn.Linear(640+80+16,360)
+        self.ac_2 = nn.Linear(360,action_dim)
+        
+        #self.va_floor = nn.Linear(80,160)
+        #self.va_elv = nn.Linear(10,20)
+        #self.va_elv_place = nn.Linear(1,2)
+        self.va_floor = nn.Conv1d(2,32,3,padding=1)
+        self.va_elv = nn.Conv1d(1,16,3,padding=1)
+        self.va_elv_place = nn.Linear(1,16)
+        
+        self.va_floor_1 = nn.Conv1d(32,32,3,padding=1)
+        self.va_elv_1 = nn.Conv1d(16,16,3,padding=1)
+        
+        self.va_1 = nn.Linear(640+80+16,360)
+        self.va_2 = nn.Linear(360,action_dim)
+        
+        
+        self.minibatch_size = 64
+        self.gamma = 0.99
+        self.lmbda = 0.95
+        self.device = device
+        self.lr_rate = 0.0003
+        self.eps_clip = 0.2
+        self.critic_coef = 0.5
+        self.optimizer = optim.Adam(self.parameters(),lr = self.lr_rate)
     def get_action(self,floor,elv,elv_place,softmax_dim = -1):
-        #(batch_size, hidden_size, max_seq_len)
-        floor = self.floor_encoder(floor)
-        elv = self.elv_encoder(elv)
-        elv_place = F.relu(self.elv_place_encoder_1(elv_place))
-        elv_place = (self.elv_place_encoder_2(elv_place))
+        batch_size = floor.shape[0]
+        #floor = floor.view(batch_size,-1)
+        #elv = elv.view(batch_size,-1)
+        #elv_place = elv_place.view(batch_size,-1)
+        
+        
+        floor = self.maxpool(torch.relu(self.ac_floor(floor)))
+        floor = (torch.relu(self.ac_floor_1(floor)))
+        elv = self.maxpool(torch.relu(self.ac_elv(elv)))
+        elv = (torch.relu(self.ac_elv_1(elv)))
+        elv_place = (torch.relu(self.ac_elv_place(elv_place)))
+        
+        floor = floor.view(batch_size,-1)
+        elv = elv.view(batch_size,-1)
+        
         x = torch.cat((floor,elv,elv_place),-1)
-        #x = F.relu(x)
-        action = F.relu(self.action_1(x))
-        action = self.action_2(action)
-        prob = F.softmax(action, dim = softmax_dim)
+        x = self.ac_1(x)
+        x = self.ac_2(torch.relu(x))
+        
+        prob = F.softmax(x, dim = softmax_dim)
         return prob
     def get_value(self,floor,elv,elv_place):
-        floor = self.floor_encoder(floor)
-        elv = self.elv_encoder(elv)
-        elv_place = F.relu(self.elv_place_encoder_1(elv_place))
-        elv_place = (self.elv_place_encoder_2(elv_place))
-        x = torch.cat((floor,elv,elv_place),-1)
-        #x = F.relu(x)
+        batch_size = floor.shape[0]
+        #floor = floor.view(batch_size,-1)
+        #elv = elv.view(batch_size,-1)
+        #elv_place = elv_place.view(batch_size,-1)
         
-        value = self.value_1(x)
-        value = self.value_2(value)
-        return value
+        
+        floor = self.maxpool(torch.relu(self.va_floor(floor)))
+        floor = (torch.relu(self.va_floor_1(floor)))
+        elv = self.maxpool(torch.relu(self.va_elv(elv)))
+        elv = (torch.relu(self.va_elv_1(elv)))
+        elv_place = (torch.relu(self.va_elv_place(elv_place)))
+        
+        floor = floor.view(batch_size,-1)
+        elv = elv.view(batch_size,-1)
+        
+        x = torch.cat((floor,elv,elv_place),-1)
+        x = self.va_1(x)
+        x = self.va_2(torch.relu(x))
+        return x
     
     def put_data(self,data):
         self.memory.append(data)
@@ -136,42 +142,58 @@ class Agent(nn.Module):
                                         torch.tensor(done_list,dtype = torch.float).to(device),\
                                         torch.tensor(prob_list).to(device)
         return s1.squeeze(1),s2.squeeze(1),s3.squeeze(1),a,r,next_s1.squeeze(1),next_s2.squeeze(1),next_s3.squeeze(1),done_mask,prob
-    
+    def choose_mini_batch(self, mini_batch_size, states1,states2,states3, actions, rewards, next_states1,next_states2,next_states3, done_mask, old_log_prob, advantages, returns,old_value):
+        full_batch_size = len(states1)
+        full_indices = np.arange(full_batch_size)
+        np.random.shuffle(full_indices)
+        for i in range(full_batch_size // mini_batch_size):
+            indices = full_indices[mini_batch_size*i : mini_batch_size*(i+1)]
+            yield states1[indices],states2[indices],states3[indices], actions[indices], rewards[indices], next_states1[indices],next_states2[indices],next_states3[indices], done_mask[indices],\
+                  old_log_prob[indices], advantages[indices], returns[indices],old_value[indices]
     def train(self,summary,epoch):
-        state_1,state_2,state_3,action,reward, next_state_1,next_state_2,next_state_3,done_mask,action_prob = self.make_batch()
-
+        state_1_,state_2_,state_3_,action_,reward_, next_state_1_,next_state_2_,next_state_3_,done_mask_,action_prob_ = self.make_batch()
+        old_value_ = self.get_value(state_1_,state_2_,state_3_).detach()
+        td_target = reward_ + self.gamma * self.get_value(next_state_1_,next_state_2_,next_state_3_) * done_mask_
+        delta = td_target - old_value_
+        delta = delta.detach().cpu().numpy()
+        advantage_lst = []
+        advantage = 0.0
+        for idx in reversed(range(len(delta))):
+            if done_mask_[idx] == 0:
+                advantage = 0.0
+            advantage = self.gamma * self.lmbda * advantage + delta[idx][0]
+            advantage_lst.append([advantage])
+        advantage_lst.reverse()
+        advantage_ = torch.tensor(advantage_lst, dtype=torch.float).to(self.device)
+        returns_ = advantage_ + old_value_
+        advantage_ = (advantage_ - advantage_.mean())/(advantage_.std()+1e-3)
         for i in range(K_epoch):
-            td_error = reward + gamma * self.get_value(next_state_1,next_state_2,next_state_3) * done_mask
-            delta = td_error - self.get_value(state_1,state_2,state_3)
-            if torch.cuda.is_available():
-                delta = delta.cpu().detach().numpy()
-            else:
-                delta = delta.detach().numpy()
-            advantage_list = []
-            advantage = 0.0
-            for delta_t in delta[::-1]:
-                advantage = gamma * lmbda * advantage + delta_t[0]
-                advantage_list.append([advantage])
-            advantage_list.reverse()
-            advantage = torch.tensor(advantage_list,dtype = torch.float).to(device)
-            
-            
-            now_action = self.get_action(state_1,state_2,state_3,softmax_dim = -1)
-            now_action = now_action.gather(1,action)
-            
-            ratio = torch.exp(torch.log(now_action) - torch.log(action_prob))
-            
-            surr1 = ratio * advantage
-            surr2 = torch.clamp(ratio , 1-eps_clip, 1 + eps_clip) * advantage
-            loss_1 = - torch.min(surr1,surr2).mean()
-            loss_2 = F.smooth_l1_loss(self.get_value(state_1,state_2,state_3),td_error.detach())
-            loss = loss_1 + loss_2
-            self.optimizer.zero_grad()
-            loss.backward()
-            self.optimizer.step()
-            if i == 0 :
-                summary.add_scalar('loss/loss_1', loss_1.item(), epoch)
-                summary.add_scalar('loss/loss_2', loss_2.item(), epoch)
+            for state_1,state_2,state_3,action,reward,next_state_1,next_state_2,next_state_3,done_mask,action_prob,advantage,return_,old_value in self.choose_mini_batch(\
+                                                                              self.minibatch_size ,state_1_,state_2_,state_3_, action_,reward_, next_state_1_,next_state_2_,next_state_3_, done_mask_, action_prob_,advantage_,returns_,old_value_): 
+                #td_error = reward + self.gamma * self.get_value(next_state_1,next_state_2,next_state_3) * done_mask
+                value = self.get_value(state_1,state_2,state_3).float()
+                now_action = self.get_action(state_1,state_2,state_3,softmax_dim = -1)
+                now_action = now_action.gather(1,action)
+
+                ratio = torch.exp(torch.log(now_action) - torch.log(action_prob))
+
+                surr1 = ratio * advantage
+                surr2 = torch.clamp(ratio , 1-self.eps_clip, 1 + self.eps_clip) * advantage
+                actor_loss = - torch.min(surr1,surr2).mean()
+                
+                old_value_clipped = old_value + (value - old_value).clamp(-self.eps_clip,self.eps_clip)
+                value_loss = (value - return_.detach().float()).pow(2)
+                value_loss_clipped = (old_value_clipped - return_.detach().float()).pow(2)
+                
+                critic_loss = 0.5 * self.critic_coef * torch.max(value_loss,value_loss_clipped).mean()
+                
+                loss = actor_loss + critic_loss
+                self.optimizer.zero_grad()
+                loss.backward()
+                self.optimizer.step()
+                if i == 0 :
+                    summary.add_scalar('loss/actor_loss', actor_loss.item(), epoch)
+                    summary.add_scalar('loss/critic_loss', critic_loss.item(), epoch)
 
 
 
