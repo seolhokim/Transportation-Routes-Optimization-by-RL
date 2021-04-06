@@ -47,9 +47,7 @@ class Building(object):
         if len(floor_passengers) == 0 :
             floor_passengers.append([-1,-1])
         elv_passengers = [e.get_passengers_info() for e in self.elevators]
-        elv_passengers = [x for x in elv_passengers if x != []]
-        if len(elv_passengers) == 0 :
-            elv_passengers.append([-1])
+        
         elevators_floors = [e.curr_floor for e in self.elevators]
         return floor_passengers,elv_passengers,elevators_floors
     

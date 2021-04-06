@@ -38,9 +38,10 @@ def is_finish(state):
 
 def state_preprocessing(floor_state,elv_state,elv_place_state):
     floor_state = torch.tensor(floor_state).transpose(1,0).unsqueeze(0).float()
-    floor_state = torch.cat((floor_state,-1* torch.ones((1,2,MAX_PASSENGERS_LENGTH - floor_state.shape[2]))),-1)/10.
+    floor_state = torch.cat((floor_state,-1* torch.ones((1,2,args.building_height*args.max_people_in_floor- floor_state.shape[2]))),-1)/10.
+    elv_state = [elv_state[idx]+([-1] * (args.max_people_in_elevator- len(elv_state[idx]))) for idx in range(len(elv_state))]
     elv_state = torch.tensor(elv_state).unsqueeze(0).float()
-    elv_state = torch.cat((elv_state,-1* torch.ones((1,1,MAX_ELV_LENGTH - elv_state.shape[2]))),-1)/10.
+    
     elv_place_state = torch.tensor(elv_place_state).unsqueeze(0).float()/10.
     return floor_state.to(device),elv_state.to(device),elv_place_state.to(device)
 
