@@ -21,10 +21,7 @@ T_horizon     = 2048
 
 add_people_at_step = 25
 add_people_prob = 0.8
-print_interval = 20
 global_step = 0
-MAX_PASSENGERS_LENGTH = 40
-MAX_ELV_LENGTH = 10
 
 if torch.cuda.is_available():
     device = torch.device("cuda") 
@@ -45,13 +42,14 @@ def state_preprocessing(floor_state,elv_state,elv_place_state):
     elv_place_state = torch.tensor(elv_place_state).unsqueeze(0).float()/10.
     return floor_state.to(device),elv_state.to(device),elv_place_state.to(device)
 
-def main(): 
+def main():
+    global args
     parser = argparse.ArgumentParser('parameters')
     parser.add_argument('--test', type=bool, default=False, help="True if test, False if train (default: False)")
     parser.add_argument('--epochs', type=int, default=10000, help='number of epochs, (default: 100)')
-    parser.add_argument('--lr_rate', type=float, default=0.0001, help='learning rate (default : 0.0001)')
+    parser.add_argument('--lr_rate', type=float, default=0.0003, help='learning rate (default : 0.0001)')
     parser.add_argument('--lift_num', type=int, default=1, help='number of elevators ')
-    parser.add_argument('--building_height', type=int, default=5, help='building height ')
+    parser.add_argument('--building_height', type=int, default=8, help='building height ')
     parser.add_argument('--max_people_in_floor', type=int, default=8, help='maximum people in one floor')
     parser.add_argument('--max_people_in_elevator', type=int, default=8, help='maximum people in one elevator')
     parser.add_argument("--load_file", type=str, default = 'no', help = 'load initial parameters')

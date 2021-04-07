@@ -18,8 +18,6 @@ else:
 #Hyperparameters
 
 K_epoch       = 10
-MAX_PASSENGERS_LENGTH = 40
-MAX_ELV_LENGTH = 10
 
 add_people_at_step = 25
 add_people_prob = 0.8
