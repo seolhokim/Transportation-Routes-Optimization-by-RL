@@ -84,6 +84,10 @@ def main():
 
             next_floor_state,next_elv_state,next_elv_place_state = state_preprocessing(args,device,next_floor_state,next_elv_state,next_elv_place_state)
             done = is_finish((next_floor_state,next_elv_state))
+            if done == True:
+                reward = 100.
+            else:
+                reward = -10.
             agent.put_data((floor_state.cpu().tolist(),\
                             elv_state.cpu().tolist(),\
                             elv_place_state.cpu().tolist(),\

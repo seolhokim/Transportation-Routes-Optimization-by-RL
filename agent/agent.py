@@ -6,7 +6,7 @@ import torch.optim as optim
 import numpy as np
 
 from utils import Rollouts
-from networks import Actor,Critic
+from agent.networks import Actor,Critic
 class Agent(nn.Module):
     def __init__(self,device, lift_num, building_height, max_people_in_floor, max_people_in_elevator,action_dim,K_epoch,gamma,lmbda,lr_rate,eps_clip,critic_coef,minibatch_size):
         super(Agent,self).__init__()
