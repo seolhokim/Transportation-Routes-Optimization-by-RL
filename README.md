@@ -1,4 +1,4 @@
-# Optimize transportation routes by Reinforcement learning
+# Transportation Routes Obtimization by Reinforcement Learning
 ![Hits](https://hits.seeyoufarm.com/api/count/incr/badge.svg?url=https://github.com/seolhokim/elevator-reinforcementlearning-application)
 - application of reinforcement learning to optimize transportation routes
                                   
