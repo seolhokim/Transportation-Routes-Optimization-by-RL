@@ -3,7 +3,6 @@ import numpy as np
 from environment.Elevator import Elevator
 from environment.Passenger import Passenger
 
-
 class Building(object):
     '''
     Building controls elevators and passengers.

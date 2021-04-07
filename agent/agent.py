@@ -1,154 +1,42 @@
-import argparse
-import numpy as np
-import os
-from environment.Building import Building
-import time
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-from torch.distributions import Categorical
-from tensorboardX import SummaryWriter
 
-if torch.cuda.is_available():
-    device = torch.device("cuda") 
-else:
-    device = 'cpu'
+import numpy as np
 
-#Hyperparameters
-
-K_epoch       = 10
-
-add_people_at_step = 25
-add_people_prob = 0.8
-
-print_interval = 20
-global_step = 0
-
-
+from utils import Rollouts
+from networks import Actor,Critic
 class Agent(nn.Module):
-    def __init__(self, lift_num, building_height, max_people_in_floor, max_people_in_elevator,action_dim):
+    def __init__(self,device, lift_num, building_height, max_people_in_floor, max_people_in_elevator,action_dim,K_epoch,gamma,lmbda,lr_rate,eps_clip,critic_coef,minibatch_size):
         super(Agent,self).__init__()
-        self.memory = []
-        self.action_dim = action_dim
-        self.lift_num = lift_num
-        self.maxpool = nn.MaxPool1d(2)
-        '''
-        floor,elv,elv_place
-        floor shape : batch , 2 , (building_height * max_people_in_floor)
-        elv shape : batch , lift_num , max_people_in_elevator
-        elv_pace shape : batch , lift_num
-        '''
-        ##actor
-        
-        self.ac_floor = nn.Conv1d(2,32,3,padding=1)
-        self.ac_elv = nn.Conv1d(lift_num,16,3,padding=1)
-        self.ac_elv_place = nn.Linear(lift_num,16)
-        
-        self.ac_floor_1 = nn.Conv1d(32,32,3,padding=1)
-        self.ac_elv_1 = nn.Conv1d(16,16,3,padding=1)
-        
-        self.ac_1 = nn.Linear(int(32*(building_height * max_people_in_floor)*(1/2)+16*max_people_in_elevator*(1/2)+16),360)
-        self.ac_2 = nn.Linear(360,action_dim*lift_num)
-        
-        
-        ##value
-        self.va_floor = nn.Conv1d(2,32,3,padding=1)
-        self.va_elv = nn.Conv1d(lift_num,16,3,padding=1)
-        self.va_elv_place = nn.Linear(lift_num,16)
-        
-        self.va_floor_1 = nn.Conv1d(32,32,3,padding=1)
-        self.va_elv_1 = nn.Conv1d(16,16,3,padding=1)
-        
-        self.va_1 = nn.Linear(int(32*(building_height * max_people_in_floor)*(1/2)+16*max_people_in_elevator*(1/2)+16),360)
-        self.va_2 = nn.Linear(360,1)
-        
-        
-        
-        self.minibatch_size = 64
-        self.gamma = 0.99
-        self.lmbda = 0.95
+        self.data = Rollouts()
+        self.gamma = gamma
+        self.lmbda = lmbda
         self.device = device
-        self.lr_rate = 0.0003
-        self.eps_clip = 0.2
-        self.critic_coef = 0.5
+        self.lr_rate = lr_rate
+        self.eps_clip = eps_clip
+        self.K_epoch = K_epoch
+        self.critic_coef = critic_coef
+        
+        self.minibatch_size = minibatch_size
+        self.actor = Actor(building_height,max_people_in_floor,max_people_in_elevator,\
+                          action_dim,lift_num)
+        self.critic = Critic(building_height,max_people_in_floor,max_people_in_elevator,\
+                          action_dim,lift_num)
+
         self.optimizer = optim.Adam(self.parameters(),lr = self.lr_rate)
     def get_action(self,floor,elv,elv_place,softmax_dim = -1):
-        batch_size = floor.shape[0]
+        return self.actor(floor,elv,elv_place,softmax_dim)
         
-        floor = self.maxpool(torch.relu(self.ac_floor(floor)))
-        floor = (torch.relu(self.ac_floor_1(floor)))
-        elv = self.maxpool(torch.relu(self.ac_elv(elv)))
-        elv = (torch.relu(self.ac_elv_1(elv)))
-        elv_place = (torch.relu(self.ac_elv_place(elv_place)))
-        
-        floor = floor.view(batch_size,-1)
-        elv = elv.view(batch_size,-1)
-        
-        x = torch.cat((floor,elv,elv_place),-1)
-        x = self.ac_1(x)
-        x = self.ac_2(torch.relu(x))
-        
-        x = x.view(-1,self.lift_num,self.action_dim)
-        prob = F.softmax(x, dim = softmax_dim)
-        return prob
     def get_value(self,floor,elv,elv_place):
-        batch_size = floor.shape[0]
-        
-        floor = self.maxpool(torch.relu(self.va_floor(floor)))
-        floor = (torch.relu(self.va_floor_1(floor)))
-        elv = self.maxpool(torch.relu(self.va_elv(elv)))
-        elv = (torch.relu(self.va_elv_1(elv)))
-        elv_place = (torch.relu(self.va_elv_place(elv_place)))
-        
-        floor = floor.view(batch_size,-1)
-        elv = elv.view(batch_size,-1)
-        
-        x = torch.cat((floor,elv,elv_place),-1)
-        x = self.va_1(x)
-        x = self.va_2(torch.relu(x))
-        return x
+        return self.critic(floor,elv,elv_place)
     
-    def put_data(self,data):
-        self.memory.append(data)
+    def put_data(self,transition):
+        self.data.append(transition)
         
-    def make_batch(self):
-        state_1_list,state_2_list,state_3_list, action_list, reward_list, next_state_1_list,next_state_2_list,next_state_3_list, prob_list, done_list = [],[],[],[],[],[],[],[],[],[]
-        for data in self.memory:
-            state_1,state_2,state_3,action,reward,next_state_1,next_state_2,next_state_3,prob,done = data
-            state_1_list.append(state_1)
-            state_2_list.append(state_2)
-            state_3_list.append(state_3)
-            action_list.append(action)
-            reward_list.append([reward])
-            prob_list.append(prob)
-            next_state_1_list.append(next_state_1)
-            next_state_2_list.append(next_state_2)
-            next_state_3_list.append(next_state_3)
-            done_mask = 0 if done else 1
-            done_list.append([done_mask])
-        self.memory = []
-        
-        s1,s2,s3,a,r,next_s1,next_s2,next_s3,done_mask,prob = torch.tensor(state_1_list,dtype=torch.float).to(device),\
-                                            torch.tensor(state_2_list,dtype=torch.float).to(device),\
-                                            torch.tensor(state_3_list,dtype=torch.float).to(device),\
-                                        torch.tensor(action_list).to(device),torch.tensor(reward_list).to(device),\
-                                        torch.tensor(next_state_1_list,dtype=torch.float).to(device),\
-                                        torch.tensor(next_state_2_list,dtype=torch.float).to(device),\
-                                        torch.tensor(next_state_3_list,dtype=torch.float).to(device),\
-                                        torch.tensor(done_list,dtype = torch.float).to(device),\
-                                        torch.tensor(prob_list).to(device)
-        return s1.squeeze(1),s2.squeeze(1),s3.squeeze(1),a,r,next_s1.squeeze(1),next_s2.squeeze(1),next_s3.squeeze(1),done_mask,prob
-    def choose_mini_batch(self, mini_batch_size, states1,states2,states3, actions, rewards, next_states1,next_states2,next_states3, done_mask, old_log_prob, advantages, returns,old_value):
-        full_batch_size = len(states1)
-        full_indices = np.arange(full_batch_size)
-        np.random.shuffle(full_indices)
-        for i in range(full_batch_size // mini_batch_size):
-            indices = full_indices[mini_batch_size*i : mini_batch_size*(i+1)]
-            yield states1[indices],states2[indices],states3[indices], actions[indices], rewards[indices], next_states1[indices],next_states2[indices],next_states3[indices], done_mask[indices],\
-                  old_log_prob[indices], advantages[indices], returns[indices],old_value[indices]
     def train(self,summary,epoch):
-        state_1_,state_2_,state_3_,action_,reward_, next_state_1_,next_state_2_,next_state_3_,done_mask_,action_prob_ = self.make_batch()
+        state_1_,state_2_,state_3_,action_,reward_, next_state_1_,next_state_2_,next_state_3_,done_mask_,action_prob_ = self.data.make_batch(self.device)
         old_value_ = self.get_value(state_1_,state_2_,state_3_).detach()
         td_target = reward_ + self.gamma * self.get_value(next_state_1_,next_state_2_,next_state_3_) * done_mask_
         delta = td_target - old_value_
@@ -164,10 +52,9 @@ class Agent(nn.Module):
         advantage_ = torch.tensor(advantage_lst, dtype=torch.float).to(self.device)
         returns_ = advantage_ + old_value_
         advantage_ = (advantage_ - advantage_.mean())/(advantage_.std()+1e-3)
-        for i in range(K_epoch):
-            for state_1,state_2,state_3,action,reward,next_state_1,next_state_2,next_state_3,done_mask,action_prob,advantage,return_,old_value in self.choose_mini_batch(\
+        for i in range(self.K_epoch):
+            for state_1,state_2,state_3,action,reward,next_state_1,next_state_2,next_state_3,done_mask,action_prob,advantage,return_,old_value in self.data.choose_mini_batch(\
                                                                               self.minibatch_size ,state_1_,state_2_,state_3_, action_,reward_, next_state_1_,next_state_2_,next_state_3_, done_mask_, action_prob_,advantage_,returns_,old_value_): 
-                #td_error = reward + self.gamma * self.get_value(next_state_1,next_state_2,next_state_3) * done_mask
                 value = self.get_value(state_1,state_2,state_3).float()
                 now_action = self.get_action(state_1,state_2,state_3,softmax_dim = -1)
                 now_action = now_action.gather(2,action.unsqueeze(-1)).squeeze(-1)
@@ -191,6 +78,4 @@ class Agent(nn.Module):
                 if i == 0 :
                     summary.add_scalar('loss/actor_loss', actor_loss.item(), epoch)
                     summary.add_scalar('loss/critic_loss', critic_loss.item(), epoch)
-
-
 
