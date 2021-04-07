@@ -13,7 +13,6 @@ import numpy as np
 import os
 import time
 
-os.makedirs('./model_weights', exist_ok=True)
 gamma         = 0.98
 lmbda         = 0.95
 eps_clip      = 0.1
@@ -34,7 +33,7 @@ else:
 
 def is_finish(state):
     finish_check_1 = (state[0][0][0][0] == -0.1)
-    finish_check_2 = (state[1][0][0][0] == -0.1)
+    finish_check_2 = (state[1][0][:,0] == -0.1).all()
     return (finish_check_1 and finish_check_2)
 
 def state_preprocessing(floor_state,elv_state,elv_place_state):
@@ -72,7 +71,6 @@ def main():
 
     building = Building(args.lift_num, args.building_height, args.max_people_in_floor,\
                         args.max_people_in_elevator)
-    ave_steps = 0 
     action_dim = 4
     agent = Agent(args.lift_num, args.building_height, args.max_people_in_floor,\
                         args.max_people_in_elevator,action_dim)
@@ -80,6 +78,7 @@ def main():
     summary = SummaryWriter()
     if torch.cuda.is_available():
         model.cuda()
+
 
     building.empty_building()
     while building.remain_passengers_num == 0 :
@@ -95,13 +94,21 @@ def main():
             global_step += 1
             action_prob = agent.get_action(floor_state,elv_state,elv_place_state)[0]
             m = Categorical(action_prob)
-            action = m.sample().item()
-            reward = building.perform_action([action])
+            action = m.sample().tolist()
+            reward = building.perform_action(action)
             next_floor_state,next_elv_state,next_elv_place_state = building.get_state()
 
             next_floor_state,next_elv_state,next_elv_place_state = state_preprocessing(next_floor_state,next_elv_state,next_elv_place_state)
             done = is_finish((next_floor_state,next_elv_state))
-            agent.put_data((floor_state.cpu().tolist(),elv_state.cpu().tolist(),elv_place_state.cpu().tolist(), action, reward/100.0, next_floor_state.cpu().tolist(),next_elv_state.cpu().tolist(), next_elv_place_state.cpu().tolist(), action_prob[action].item(), done))
+            agent.put_data((floor_state.cpu().tolist(),\
+                            elv_state.cpu().tolist(),\
+                            elv_place_state.cpu().tolist(),\
+                            action, reward/100.0, \
+                            next_floor_state.cpu().tolist(),\
+                            next_elv_state.cpu().tolist(), \
+                            next_elv_place_state.cpu().tolist(),\
+                            [action_prob[idx][action[idx]] for idx in range(len(action_prob))],\
+                            done))
             score += reward
             if args.test:
                 os.system("cls")
@@ -129,14 +136,13 @@ def main():
 
         agent.train(summary,epoch)
 
-        ave_steps += global_step 
-
         if epoch%args.print_interval==0 and epoch!=0:
             print("# of episode :{}, avg score : {:.1f}".format(epoch, sum(score_lst)/len(score_lst)))
             score_lst = []
 
         if (epoch % args.save_interval == 0 )& (epoch != 0):
             torch.save(agent.state_dict(), './model_weights/model_'+str(epoch))
+
 
 
 if __name__ == '__main__':

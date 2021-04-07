@@ -32,6 +32,8 @@ class Agent(nn.Module):
     def __init__(self, lift_num, building_height, max_people_in_floor, max_people_in_elevator,action_dim):
         super(Agent,self).__init__()
         self.memory = []
+        self.action_dim = action_dim
+        self.lift_num = lift_num
         self.maxpool = nn.MaxPool1d(2)
         '''
         floor,elv,elv_place
@@ -49,7 +51,7 @@ class Agent(nn.Module):
         self.ac_elv_1 = nn.Conv1d(16,16,3,padding=1)
         
         self.ac_1 = nn.Linear(int(32*(building_height * max_people_in_floor)*(1/2)+16*max_people_in_elevator*(1/2)+16),360)
-        self.ac_2 = nn.Linear(360,action_dim)
+        self.ac_2 = nn.Linear(360,action_dim*lift_num)
         
         
         ##value
@@ -89,6 +91,7 @@ class Agent(nn.Module):
         x = self.ac_1(x)
         x = self.ac_2(torch.relu(x))
         
+        x = x.view(-1,self.lift_num,self.action_dim)
         prob = F.softmax(x, dim = softmax_dim)
         return prob
     def get_value(self,floor,elv,elv_place):
@@ -118,9 +121,9 @@ class Agent(nn.Module):
             state_1_list.append(state_1)
             state_2_list.append(state_2)
             state_3_list.append(state_3)
-            action_list.append([action])
+            action_list.append(action)
             reward_list.append([reward])
-            prob_list.append([prob])
+            prob_list.append(prob)
             next_state_1_list.append(next_state_1)
             next_state_2_list.append(next_state_2)
             next_state_3_list.append(next_state_3)
@@ -169,9 +172,9 @@ class Agent(nn.Module):
                 #td_error = reward + self.gamma * self.get_value(next_state_1,next_state_2,next_state_3) * done_mask
                 value = self.get_value(state_1,state_2,state_3).float()
                 now_action = self.get_action(state_1,state_2,state_3,softmax_dim = -1)
-                now_action = now_action.gather(1,action)
+                now_action = now_action.gather(2,action.unsqueeze(-1)).squeeze(-1)
 
-                ratio = torch.exp(torch.log(now_action) - torch.log(action_prob))
+                ratio = torch.exp((torch.log(now_action) - torch.log(action_prob)).sum(-1,keepdim=True))
 
                 surr1 = ratio * advantage
                 surr2 = torch.clamp(ratio , 1-self.eps_clip, 1 + self.eps_clip) * advantage
