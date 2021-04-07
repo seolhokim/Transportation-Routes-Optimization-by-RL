@@ -11,6 +11,7 @@ from utils import is_finish, state_preprocessing
 import argparse
 import numpy as np
 import os
+os.makedirs('./model_weights', exist_ok=True)
 import time
 
 action_dim = 4 # UP,DOWN,LOAD,UNLOAD
