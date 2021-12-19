@@ -62,6 +62,10 @@ def main():
                           args.gamma,args.lmbda,args.lr_rate,args.eps_clip,args.critic_coef,args.minibatch_size)
 
     summary = SummaryWriter()
+
+    if args.load_file != "no":
+        agent.load_state_dict(torch.load(args.load_file, map_location=device))
+    
     if torch.cuda.is_available():
         model.cuda()
     building.empty_building()
