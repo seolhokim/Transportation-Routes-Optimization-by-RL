@@ -63,7 +63,7 @@ def main():
 
     summary = SummaryWriter()
     if torch.cuda.is_available():
-        model.cuda()
+        agent.cuda()
     building.empty_building()
     while building.remain_passengers_num == 0 :
         building.generate_passengers(args.add_people_prob)
