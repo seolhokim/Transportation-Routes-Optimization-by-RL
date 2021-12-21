@@ -67,7 +67,7 @@ def main():
         agent.load_state_dict(torch.load(args.load_file, map_location=device))
     
     if torch.cuda.is_available():
-        model.cuda()
+        agent.cuda()
     building.empty_building()
     while building.remain_passengers_num == 0 :
         building.generate_passengers(args.add_people_prob)
